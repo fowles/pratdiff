@@ -1,6 +1,7 @@
 #![allow(unused)] // TODO(kfm): remove this
 
 use std::cmp;
+use std::iter::zip;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 enum DiffItem {
@@ -18,21 +19,13 @@ enum DiffItem {
 }
 
 fn leading_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
-  for n in 0..cmp::min(lhs.len(), rhs.len()) {
-    if lhs[n] != rhs[n] {
-      return n;
-    }
-  }
-  cmp::min(lhs.len(), rhs.len())
+  zip(lhs, rhs).take_while(|(&l, &r)| l == r).count()
 }
 
 fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
-  for n in 0..cmp::min(lhs.len(), rhs.len()) {
-    if lhs[lhs.len() - 1 - n] != rhs[rhs.len() - 1 - n] {
-      return n;
-    }
-  }
-  cmp::min(lhs.len(), rhs.len())
+  zip(lhs.iter().rev(), rhs.iter().rev())
+    .take_while(|(&l, &r)| l == r)
+    .count()
 }
 
 // Patience diff algorithm
