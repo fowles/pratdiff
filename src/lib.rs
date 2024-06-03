@@ -95,7 +95,10 @@ fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
 }
 
 fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
-  let matched = match_unique_lines(lhs, rhs);
+  let matched = (1..5) // 5 selected arbitrarily
+    .filter_map(|i| match_lines(i, lhs, rhs))
+    .next()
+    .unwrap_or_default();
   if matched.is_empty() {
     return vec![DiffItem::Mutation {
       lhs_pos: 0,
@@ -131,7 +134,11 @@ fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
   r
 }
 
-fn match_unique_lines(lhs: &[&str], rhs: &[&str]) -> Vec<(usize, usize)> {
+fn match_lines(
+  match_arity: usize,
+  lhs: &[&str],
+  rhs: &[&str],
+) -> Option<Vec<(usize, usize)>> {
   let mut m = HashMap::<&str, (Vec<usize>, Vec<usize>)>::new();
   for (i, l) in lhs.iter().enumerate() {
     m.entry(l).or_default().0.push(i);
@@ -141,12 +148,17 @@ fn match_unique_lines(lhs: &[&str], rhs: &[&str]) -> Vec<(usize, usize)> {
   }
 
   let mut v: Vec<(usize, usize)> = m
-    .values()
-    .filter(|(l, r)| l.len() == 1 && r.len() == 1)
-    .map(|(l, r)| (l[0], r[0]))
+    .into_values()
+    .filter(|(l, r)| l.len() == match_arity && r.len() == match_arity)
+    .map(|(l, r)| zip(l, r))
+    .flatten()
     .collect();
   v.sort();
-  v
+  if v.is_empty() {
+    None
+  } else {
+    Some(v)
+  }
 }
 
 fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
@@ -253,13 +265,40 @@ mod tests {
   }
 
   #[test]
-  fn match_unique_lines_basic() {
+  fn diff_only_non_unique() {
     assert_eq!(
-      match_unique_lines(
-        &["a", "b", "c", "d", "e", "d"],
-        &["a", "c", "d", "e"]
-      ),
-      vec![(0, 0), (2, 1), (4, 3)]
+      diff(&["a", "b", "b", "c"], &["b", "b"]),
+      vec![
+        DiffItem::Mutation {
+          lhs_pos: 0,
+          lhs_len: 1,
+          rhs_pos: 0,
+          rhs_len: 0,
+        },
+        DiffItem::Match { lhs: 1, rhs: 0, len: 2 },
+        DiffItem::Mutation {
+          lhs_pos: 3,
+          lhs_len: 1,
+          rhs_pos: 2,
+          rhs_len: 0,
+        },
+      ]
+    );
+  }
+
+  #[test]
+  fn match_lines_arity1() {
+    assert_eq!(
+      match_lines(1, &["a", "b", "c", "d", "e", "d"], &["a", "c", "d", "e"]),
+      Some(vec![(0, 0), (2, 1), (4, 3)]),
+    );
+  }
+
+  #[test]
+  fn match_lines_arity2() {
+    assert_eq!(
+      match_lines(2, &["a", "b", "b", "c"], &["b", "b"]),
+      Some(vec![(1, 0), (2, 1)]),
     );
   }
 
