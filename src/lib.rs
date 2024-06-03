@@ -157,7 +157,7 @@ fn match_unique_lines(lhs: &[&str], rhs: &[&str]) -> Vec<(usize, usize)> {
 
 fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
   type PairingStack = Vec<Vec<((usize, usize), usize)>>;
-  let find_push_pos = |stacks: &PairingStack, p: &(usize, usize)| -> usize {
+  fn find_push_pos(stacks: &PairingStack, p: &(usize, usize)) -> usize {
     for (pos, stack) in stacks.iter().enumerate() {
       if p.1 < stack.last().unwrap().0 .1 {
         return pos;
