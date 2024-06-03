@@ -1,8 +1,7 @@
-
 use std::collections::HashMap;
 use std::iter::zip;
 
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiffItem {
   Match {
     lhs: usize,
