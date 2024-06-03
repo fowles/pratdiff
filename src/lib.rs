@@ -4,7 +4,7 @@ use std::cmp;
 use std::iter::zip;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-enum DiffItem {
+pub enum DiffItem {
   Match {
     lhs: usize,
     rhs: usize,
@@ -18,16 +18,6 @@ enum DiffItem {
   },
 }
 
-fn leading_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
-  zip(lhs, rhs).take_while(|(&l, &r)| l == r).count()
-}
-
-fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
-  zip(lhs.iter().rev(), rhs.iter().rev())
-    .take_while(|(&l, &r)| l == r)
-    .count()
-}
-
 // Patience diff algorithm
 //
 // 1. Match the first lines of both if they're identical, then match the second,
@@ -37,7 +27,7 @@ fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
 // 3. Find all lines which occur exactly once on both sides, then do longest
 //    common subsequence on those lines, matching them up.
 // 4. Do steps 1-2 on each section between matched lines.
-fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
+pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
   let mut r = Vec::new();
   let leading = leading_match_len(lhs, rhs);
   if leading != 0 {
@@ -67,6 +57,16 @@ fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
   }
 
   r
+}
+
+fn leading_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
+  zip(lhs, rhs).take_while(|(&l, &r)| l == r).count()
+}
+
+fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
+  zip(lhs.iter().rev(), rhs.iter().rev())
+    .take_while(|(&l, &r)| l == r)
+    .count()
 }
 
 #[cfg(test)]
