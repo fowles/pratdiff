@@ -18,6 +18,36 @@ pub enum DiffItem {
   },
 }
 
+impl DiffItem {
+  fn offset(&self, l: usize, r: usize) -> DiffItem {
+    match self {
+      DiffItem::Match { lhs, rhs, len } => {
+        DiffItem::Match { lhs: *lhs + l, rhs: *rhs + r, len: *len }
+      }
+      DiffItem::Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
+        DiffItem::Mutation {
+          lhs_pos: *lhs_pos + l,
+          lhs_len: *lhs_len,
+          rhs_pos: *rhs_pos + r,
+          rhs_len: *rhs_len,
+        }
+      }
+    }
+  }
+
+  fn grow(&mut self, size: usize) {
+    match self {
+      DiffItem::Match { lhs, rhs, len } => {
+        *len += size;
+      }
+      DiffItem::Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
+        *lhs_len += size;
+        *rhs_len += size;
+      }
+    }
+  }
+}
+
 // Patience diff algorithm
 //
 // 1. Match the first lines of both if they're identical, then match the second,
@@ -40,13 +70,14 @@ pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
 
   let trailing = trailing_match_len(lhs, rhs);
 
-  // TODO(kfm): step 3
-  r.push(DiffItem::Mutation {
-    lhs_pos: leading,
-    lhs_len: lhs.len() - leading - trailing,
-    rhs_pos: leading,
-    rhs_len: rhs.len() - leading - trailing,
-  });
+  r.extend(
+    partition(
+      &lhs[leading..lhs.len() - trailing],
+      &rhs[leading..rhs.len() - trailing],
+    )
+    .into_iter()
+    .map(|d| d.offset(leading, leading)),
+  );
 
   if trailing != 0 {
     r.push(DiffItem::Match {
@@ -70,27 +101,40 @@ fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
 }
 
 fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
-  let mut r = vec![];
-  if lhs.is_empty() && rhs.is_empty() {
-    // nothing
-  } else if (lhs.is_empty()) {
-    r.push(DiffItem::Mutation {
-      lhs_pos: 0,
-      lhs_len: 0,
-      rhs_pos: 0,
-      rhs_len: rhs.len(),
-    });
-  } else if (rhs.is_empty()) {
-    r.push(DiffItem::Mutation {
+
+  let matched = match_unique_lines(lhs, rhs);
+  if matched.is_empty() {
+    return vec![DiffItem::Mutation {
       lhs_pos: 0,
       lhs_len: lhs.len(),
       rhs_pos: 0,
-      rhs_len: 0,
-    });
-  } else {
-    let matched = match_unique_lines(lhs, rhs);
-    let matched = longest_common_subseq(&matched);
+      rhs_len: rhs.len(),
+    }];
   }
+  let matched = longest_common_subseq(&matched);
+
+  let mut r = Vec::<DiffItem>::new();
+  let mut lhs_pos: usize = 0;
+  let mut rhs_pos: usize = 0;
+  for (lhs_next, rhs_next) in matched.iter() {
+    if lhs_pos == *lhs_next && rhs_pos == *rhs_next {
+      r.last_mut().unwrap().grow(1);
+    } else {
+      r.extend(
+        diff(&lhs[lhs_pos..*lhs_next], &rhs[rhs_pos..*rhs_next])
+          .into_iter()
+          .map(|d| d.offset(lhs_pos, rhs_pos)),
+      );
+      r.push(DiffItem::Match { lhs: *lhs_next, rhs: *rhs_next, len: 1 });
+    }
+    lhs_pos = lhs_next + 1;
+    rhs_pos = rhs_next + 1;
+  }
+  r.extend(
+    diff(&lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()])
+      .into_iter()
+      .map(|d| d.offset(lhs_pos, rhs_pos)),
+  );
   r
 }
 
@@ -104,8 +148,7 @@ fn match_unique_lines(lhs: &[&str], rhs: &[&str]) -> Vec<(usize, usize)> {
   }
 
   let mut v: Vec<(usize, usize)> = m
-    .iter()
-    .map(|(_, v)| v)
+    .values()
     .filter(|(l, r)| l.len() == 1 && r.len() == 1)
     .map(|(l, r)| (l[0], r[0]))
     .collect();
@@ -121,7 +164,7 @@ fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
         return pos;
       }
     }
-    return stacks.len();
+    stacks.len()
   };
 
   let mut stacks = PairingStack::new();
@@ -176,13 +219,32 @@ mod tests {
         DiffItem::Match { lhs: 2, rhs: 1, len: 1 },
       ]
     );
+    assert_eq!(
+      diff(&vec!["z", "a", "b", "c"], &vec!["a", "c"]),
+      vec![
+        DiffItem::Mutation {
+          lhs_pos: 0,
+          lhs_len: 1,
+          rhs_pos: 0,
+          rhs_len: 0,
+        },
+        DiffItem::Match { lhs: 1, rhs: 0, len: 1 },
+        DiffItem::Mutation {
+          lhs_pos: 2,
+          lhs_len: 1,
+          rhs_pos: 1,
+          rhs_len: 0,
+        },
+        DiffItem::Match { lhs: 3, rhs: 1, len: 1 },
+      ]
+    );
   }
 
   #[test]
   fn match_unique_lines_basic() {
     assert_eq!(
       match_unique_lines(
-        &vec!["a", "b", "c", "d", "e", "d",],
+        &vec!["a", "b", "c", "d", "e", "d"],
         &vec!["a", "c", "d", "e"]
       ),
       vec![(0, 0), (2, 1), (4, 3)]
