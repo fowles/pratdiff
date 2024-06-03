@@ -237,6 +237,25 @@ mod tests {
         DiffItem::Match { lhs: 3, rhs: 1, len: 1 },
       ]
     );
+    assert_eq!(
+      diff(&vec!["z", "a", "e", "b", "c"], &vec!["a", "e", "c"]),
+      vec![
+        DiffItem::Mutation {
+          lhs_pos: 0,
+          lhs_len: 1,
+          rhs_pos: 0,
+          rhs_len: 0,
+        },
+        DiffItem::Match { lhs: 1, rhs: 0, len: 2 },
+        DiffItem::Mutation {
+          lhs_pos: 3,
+          lhs_len: 1,
+          rhs_pos: 2,
+          rhs_len: 0,
+        },
+        DiffItem::Match { lhs: 4, rhs: 2, len: 1 },
+      ]
+    );
   }
 
   #[test]
