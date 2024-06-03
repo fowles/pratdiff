@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::iter::zip;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum DiffItem {
   Match {
     lhs: usize,
@@ -20,27 +20,23 @@ pub enum DiffItem {
 
 impl DiffItem {
   fn offset(&self, l: usize, r: usize) -> DiffItem {
-    match self {
-      DiffItem::Match { lhs, rhs, len } => {
-        DiffItem::Match { lhs: *lhs + l, rhs: *rhs + r, len: *len }
+    let mut copy = *self;
+    match &mut copy {
+      DiffItem::Mutation { lhs_pos: lhs, rhs_pos: rhs, .. }
+      | DiffItem::Match { lhs, rhs, .. } => {
+        *lhs += l;
+        *rhs += r;
       }
-      DiffItem::Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
-        DiffItem::Mutation {
-          lhs_pos: *lhs_pos + l,
-          lhs_len: *lhs_len,
-          rhs_pos: *rhs_pos + r,
-          rhs_len: *rhs_len,
-        }
-      }
-    }
+    };
+    copy
   }
 
   fn grow(&mut self, size: usize) {
     match self {
-      DiffItem::Match { lhs, rhs, len } => {
+      DiffItem::Match { len, .. } => {
         *len += size;
       }
-      DiffItem::Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
+      DiffItem::Mutation { lhs_len, rhs_len, .. } => {
         *lhs_len += size;
         *rhs_len += size;
       }
@@ -115,16 +111,16 @@ fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
   let mut r = Vec::<DiffItem>::new();
   let mut lhs_pos: usize = 0;
   let mut rhs_pos: usize = 0;
-  for (lhs_next, rhs_next) in matched.iter() {
-    if lhs_pos == *lhs_next && rhs_pos == *rhs_next {
+  for &(lhs_next, rhs_next) in matched.iter() {
+    if lhs_pos == lhs_next && rhs_pos == rhs_next {
       r.last_mut().unwrap().grow(1);
     } else {
       r.extend(
-        diff(&lhs[lhs_pos..*lhs_next], &rhs[rhs_pos..*rhs_next])
+        diff(&lhs[lhs_pos..lhs_next], &rhs[rhs_pos..rhs_next])
           .into_iter()
           .map(|d| d.offset(lhs_pos, rhs_pos)),
       );
-      r.push(DiffItem::Match { lhs: *lhs_next, rhs: *rhs_next, len: 1 });
+      r.push(DiffItem::Match { lhs: lhs_next, rhs: rhs_next, len: 1 });
     }
     lhs_pos = lhs_next + 1;
     rhs_pos = rhs_next + 1;
@@ -167,7 +163,7 @@ fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
   };
 
   let mut stacks = PairingStack::new();
-  for p in pairings.iter() {
+  for p in pairings {
     let push_pos = find_push_pos(&stacks, p);
     if push_pos == stacks.len() {
       stacks.push(vec![]);
@@ -192,13 +188,13 @@ mod tests {
 
   #[test]
   fn diff_empty() {
-    assert_eq!(diff(&vec![], &vec![]), vec![]);
+    assert_eq!(diff(&[], &[]), vec![]);
   }
 
   #[test]
   fn diff_eq() {
     assert_eq!(
-      diff(&vec!["a", "b", "c"], &vec!["a", "b", "c"]),
+      diff(&["a", "b", "c"], &["a", "b", "c"]),
       vec![DiffItem::Match { lhs: 0, rhs: 0, len: 3 }]
     );
   }
@@ -206,7 +202,7 @@ mod tests {
   #[test]
   fn diff_ne() {
     assert_eq!(
-      diff(&vec!["a", "b", "c"], &vec!["a", "c"]),
+      diff(&["a", "b", "c"], &["a", "c"]),
       vec![
         DiffItem::Match { lhs: 0, rhs: 0, len: 1 },
         DiffItem::Mutation {
@@ -219,7 +215,7 @@ mod tests {
       ]
     );
     assert_eq!(
-      diff(&vec!["z", "a", "b", "c"], &vec!["a", "c"]),
+      diff(&["z", "a", "b", "c"], &["a", "c"]),
       vec![
         DiffItem::Mutation {
           lhs_pos: 0,
@@ -238,7 +234,7 @@ mod tests {
       ]
     );
     assert_eq!(
-      diff(&vec!["z", "a", "e", "b", "c"], &vec!["a", "e", "c"]),
+      diff(&["z", "a", "e", "b", "c"], &["a", "e", "c"]),
       vec![
         DiffItem::Mutation {
           lhs_pos: 0,
@@ -262,8 +258,8 @@ mod tests {
   fn match_unique_lines_basic() {
     assert_eq!(
       match_unique_lines(
-        &vec!["a", "b", "c", "d", "e", "d"],
-        &vec!["a", "c", "d", "e"]
+        &["a", "b", "c", "d", "e", "d"],
+        &["a", "c", "d", "e"]
       ),
       vec![(0, 0), (2, 1), (4, 3)]
     );
@@ -273,7 +269,7 @@ mod tests {
   fn longest_common_subseq_basic() {
     // From https://blog.jcoglan.com/2017/09/19/the-patience-diff-algorithm/
     assert_eq!(
-      longest_common_subseq(&vec![
+      longest_common_subseq(&[
         (0, 9),
         (1, 4),
         (2, 6),
