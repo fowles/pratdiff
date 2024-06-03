@@ -1,4 +1,3 @@
-#![allow(unused)] // TODO(kfm): remove this
 
 use std::collections::HashMap;
 use std::iter::zip;
@@ -160,7 +159,7 @@ fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
       }
     }
     stacks.len()
-  };
+  }
 
   let mut stacks = PairingStack::new();
   for p in pairings {
