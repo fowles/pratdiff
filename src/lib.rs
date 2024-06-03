@@ -75,7 +75,7 @@ pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
       &lhs[leading..lhs.len() - trailing],
       &rhs[leading..rhs.len() - trailing],
     )
-    .into_iter()
+    .iter()
     .map(|d| d.offset(leading, leading)),
   );
 
@@ -101,7 +101,6 @@ fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
 }
 
 fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
-
   let matched = match_unique_lines(lhs, rhs);
   if matched.is_empty() {
     return vec![DiffItem::Mutation {
@@ -132,7 +131,7 @@ fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
   }
   r.extend(
     diff(&lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()])
-      .into_iter()
+      .iter()
       .map(|d| d.offset(lhs_pos, rhs_pos)),
   );
   r
