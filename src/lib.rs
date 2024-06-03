@@ -89,7 +89,7 @@ fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
     });
   } else {
     let matched = match_unique_lines(lhs, rhs);
-
+    let matched = longest_common_subseq(&matched);
   }
   r
 }
@@ -111,6 +111,37 @@ fn match_unique_lines(lhs: &[&str], rhs: &[&str]) -> Vec<(usize, usize)> {
     .collect();
   v.sort();
   v
+}
+
+fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
+  type PairingStack = Vec<Vec<((usize, usize), usize)>>;
+  let find_push_pos = |stacks: &PairingStack, p: &(usize, usize)| -> usize {
+    for (pos, stack) in stacks.iter().enumerate() {
+      if p.1 < stack.last().unwrap().0 .1 {
+        return pos;
+      }
+    }
+    return stacks.len();
+  };
+
+  let mut stacks = PairingStack::new();
+  for p in pairings.iter() {
+    let push_pos = find_push_pos(&stacks, p);
+    if push_pos == stacks.len() {
+      stacks.push(vec![]);
+    }
+    let prev = if push_pos == 0 { 0 } else { stacks[push_pos - 1].len() - 1 };
+    stacks[push_pos].push((*p, prev));
+  }
+
+  let mut r = vec![];
+  let mut prev = stacks.last().unwrap().len() - 1;
+  for stack in stacks.iter().rev() {
+    r.push(stack[prev].0);
+    prev = stack[prev].1;
+  }
+  r.reverse();
+  r
 }
 
 #[cfg(test)]
@@ -155,6 +186,29 @@ mod tests {
         &vec!["a", "c", "d", "e"]
       ),
       vec![(0, 0), (2, 1), (4, 3)]
+    );
+  }
+
+  #[test]
+  fn longest_common_subseq_basic() {
+    // From https://blog.jcoglan.com/2017/09/19/the-patience-diff-algorithm/
+    assert_eq!(
+      longest_common_subseq(&vec![
+        (0, 9),
+        (1, 4),
+        (2, 6),
+        (3, 12),
+        (4, 8),
+        (5, 7),
+        (6, 1),
+        (7, 5),
+        (8, 10),
+        (9, 11),
+        (10, 3),
+        (11, 2),
+        (12, 13),
+      ]),
+      vec![(1, 4), (2, 6), (5, 7), (8, 10), (9, 11), (12, 13),]
     );
   }
 }
