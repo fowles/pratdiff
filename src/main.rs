@@ -1,6 +1,9 @@
 use anstream::println;
 use clap::Parser;
 use owo_colors::OwoColorize;
+use std::error::Error;
+
+pub mod files;
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -15,8 +18,24 @@ struct Args {
   rhs: String,
 }
 
-fn main() {
-  let _ = Args::parse();
+fn main() -> Result<(), Box<dyn Error>> {
+  let args = Args::parse();
 
-  println!("{}", "Hello, world!".red());
+  let lhs = files::read(&args.lhs)?;
+  let rhs = files::read(&args.rhs)?;
+
+  match (&lhs, &rhs) {
+    (files::Contents::Text(_), files::Contents::Text(_)) => {
+        println!("{}", "text".blue());
+    },
+    _ => {
+      if lhs.as_bytes() == rhs.as_bytes() {
+        println!("{}", "match".green());
+      } else {
+        println!("{}", "diff".green());
+      }
+    }
+  }
+
+  Ok(())
 }
