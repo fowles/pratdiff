@@ -24,17 +24,20 @@ fn main() -> Result<(), Box<dyn Error>> {
 
   let lhs = files::read(&args.lhs)?;
   let rhs = files::read(&args.rhs)?;
+  if lhs.as_bytes() == rhs.as_bytes() {
+    return Ok(());
+  }
 
   match (&lhs, &rhs) {
     (files::Contents::Text(_), files::Contents::Text(_)) => {
-        println!("{}", "text".blue());
-    },
+      println!("{}", "text".blue());
+    }
     _ => {
-      if lhs.as_bytes() == rhs.as_bytes() {
-        println!("{}", "match".green());
-      } else {
-        println!("{}", "diff".green());
-      }
+      println!(
+        "Binary files {} and {} differ",
+        args.lhs.display().red(),
+        args.rhs.display().green()
+      );
     }
   }
 
