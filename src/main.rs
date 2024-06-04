@@ -1,4 +1,6 @@
+use anstream::println;
 use clap::Parser;
+use owo_colors::OwoColorize;
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -16,5 +18,5 @@ struct Args {
 fn main() {
   let _ = Args::parse();
 
-  println!("Hello, world!");
+  println!("{}", "Hello, world!".red());
 }
