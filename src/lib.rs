@@ -118,7 +118,7 @@ fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
     } else {
       r.extend(
         diff(&lhs[lhs_pos..lhs_next], &rhs[rhs_pos..rhs_next])
-          .into_iter()
+          .iter()
           .map(|d| d.offset(lhs_pos, rhs_pos)),
       );
       r.push(DiffItem::Match { lhs: lhs_next, rhs: rhs_next, len: 1 });
@@ -135,7 +135,7 @@ fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
 }
 
 fn match_lines(
-  match_arity: usize,
+  arity: usize,
   lhs: &[&str],
   rhs: &[&str],
 ) -> Option<Vec<(usize, usize)>> {
@@ -149,7 +149,7 @@ fn match_lines(
 
   let mut v: Vec<(usize, usize)> = m
     .into_values()
-    .filter(|(l, r)| l.len() == match_arity && r.len() == match_arity)
+    .filter(|(l, r)| l.len() == arity && r.len() == arity)
     .map(|(l, r)| zip(l, r))
     .flatten()
     .collect();
