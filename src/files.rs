@@ -1,9 +1,7 @@
-use either::Either;
-use either::Either::*;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
-use std::io::Stdin;
+use std::path::Path;
 
 pub enum Contents {
   Text(String),
@@ -18,15 +16,15 @@ impl Contents {
   }
 }
 
-fn open(path: &str) -> Result<Either<Stdin, File>, Box<dyn Error>> {
-  if path == "-" {
-    Ok(Left(std::io::stdin()))
+fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn Error>> {
+  if path == Path::new("-") {
+    Ok(Box::new(std::io::stdin()))
   } else {
-    Ok(Right(File::open(path)?))
+    Ok(Box::new(File::open(path)?))
   }
 }
 
-pub fn read(path: &str) -> Result<Contents, Box<dyn Error>> {
+pub fn read(path: &Path) -> Result<Contents, Box<dyn Error>> {
   let mut file = open(path)?;
 
   let mut buffer = Vec::new();

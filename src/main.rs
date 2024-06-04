@@ -2,6 +2,7 @@ use anstream::println;
 use clap::Parser;
 use owo_colors::OwoColorize;
 use std::error::Error;
+use std::path::PathBuf;
 
 pub mod files;
 
@@ -11,11 +12,11 @@ pub mod files;
 struct Args {
   /// Path to old file or `-` for stdin.
   #[clap(name = "OLD_FILE")]
-  lhs: String,
+  lhs: PathBuf,
 
   /// Path to new file or `-` for stdin.
   #[clap(name = "NEW_FILE")]
-  rhs: String,
+  rhs: PathBuf,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
