@@ -1,10 +1,11 @@
+pub mod files;
+
 use anstream::println;
 use clap::Parser;
+use files::Contents;
 use owo_colors::OwoColorize;
 use std::error::Error;
 use std::path::PathBuf;
-
-pub mod files;
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -19,6 +20,13 @@ struct Args {
   rhs: PathBuf,
 }
 
+fn type_suffix(f: &Contents) -> &'static str {
+  match f {
+    Contents::Binary(_) => " (binary)",
+    _ => "",
+  }
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
   let args = Args::parse();
 
@@ -29,14 +37,16 @@ fn main() -> Result<(), Box<dyn Error>> {
   }
 
   match (&lhs, &rhs) {
-    (files::Contents::Text(_), files::Contents::Text(_)) => {
+    (Contents::Text(l), Contents::Text(s)) => {
       println!("{}", "text".blue());
     }
     _ => {
       println!(
-        "Binary files {} and {} differ",
+        "Files {}{} and {}{} differ",
         args.lhs.display().red(),
-        args.rhs.display().green()
+        type_suffix(&lhs),
+        args.rhs.display().green(),
+        type_suffix(&rhs),
       );
     }
   }
