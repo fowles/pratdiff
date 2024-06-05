@@ -19,7 +19,7 @@ pub enum DiffItem {
 use DiffItem::*;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Diffs {
+struct Diffs {
   vec: Vec<DiffItem>,
 }
 
@@ -28,18 +28,14 @@ impl Diffs {
     if len == 0 {
       return;
     }
-
-    match self.vec.last_mut() {
-      Some(Match { len: match_len, .. }) => {
-        *match_len += len;
-      }
-      _ => {
-        self.vec.push(Match {
-          lhs: self.lhs_pos(),
-          rhs: self.rhs_pos(),
-          len,
-        });
-      }
+    if let Some(Match { len: match_len, .. }) = self.vec.last_mut() {
+      *match_len += len;
+    } else {
+      self.vec.push(Match {
+        lhs: self.lhs_pos(),
+        rhs: self.rhs_pos(),
+        len,
+      });
     }
   }
 
@@ -47,20 +43,16 @@ impl Diffs {
     if lhs == 0 && rhs == 0 {
       return;
     }
-
-    match self.vec.last_mut() {
-      Some(Mutation { lhs_len, rhs_len, .. }) => {
-        *lhs_len += lhs;
-        *rhs_len += rhs;
-      }
-      _ => {
-        self.vec.push(Mutation {
-          lhs_pos: self.lhs_pos(),
-          lhs_len: lhs,
-          rhs_pos: self.rhs_pos(),
-          rhs_len: rhs,
-        });
-      }
+    if let Some(Mutation { lhs_len, rhs_len, .. }) = self.vec.last_mut() {
+      *lhs_len += lhs;
+      *rhs_len += rhs;
+    } else {
+      self.vec.push(Mutation {
+        lhs_pos: self.lhs_pos(),
+        lhs_len: lhs,
+        rhs_pos: self.rhs_pos(),
+        rhs_len: rhs,
+      });
     }
   }
 
@@ -102,7 +94,7 @@ pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
 // 3. Find all lines which occur exactly once on both sides, then do longest
 //    common subsequence on those lines, matching them up.
 // 4. Do steps 1-2 on each section between matched lines.
-pub fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
+fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
   let leading = leading_match_len(lhs, rhs);
   diffs.add_match(leading);
   if leading == lhs.len() && leading == rhs.len() {
