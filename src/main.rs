@@ -18,6 +18,10 @@ struct Args {
   /// Path to new file or `-` for stdin.
   #[clap(name = "NEW_FILE")]
   rhs: PathBuf,
+
+  /// Display NUM lines of unchanged context before and after changes
+  #[clap(short, long, value_name = "NUM", default_value_t = 3)]
+  context: usize,
 }
 
 fn type_suffix(f: &Contents) -> &'static str {
@@ -25,6 +29,13 @@ fn type_suffix(f: &Contents) -> &'static str {
     Contents::Binary(_) => " (binary)",
     _ => "",
   }
+}
+
+fn print_diff(lhs: &str, rhs: &str) {
+  let lhs_lines: Vec<_> = lhs.lines().collect();
+  let rhs_lines: Vec<_> = rhs.lines().collect();
+  let d = pratdiff::diff(&lhs_lines, &rhs_lines);
+  println!("{:?}", d);
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -37,8 +48,10 @@ fn main() -> Result<(), Box<dyn Error>> {
   }
 
   match (&lhs, &rhs) {
-    (Contents::Text(l), Contents::Text(s)) => {
-      println!("{}", "text".blue());
+    (Contents::Text(l), Contents::Text(r)) => {
+      println!("{} {}", "---".red(), args.lhs.display().bold().white());
+      println!("{} {}", "+++".green(), args.rhs.display().bold().white());
+      print_diff(l, r);
     }
     _ => {
       println!(
