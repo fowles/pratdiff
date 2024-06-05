@@ -62,7 +62,8 @@ pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
     return r;
   }
 
-  let trailing = trailing_match_len(lhs, rhs);
+  let trailing =
+    trailing_match_len(&lhs[leading..lhs.len()], &rhs[leading..rhs.len()]);
 
   r.extend(
     partition(
@@ -322,6 +323,23 @@ mod tests {
         (12, 13),
       ]),
       vec![(1, 4), (2, 6), (5, 7), (8, 10), (9, 11), (12, 13),]
+    );
+  }
+
+  #[test]
+  fn lead_trail_overlap() {
+    assert_eq!(
+      diff(&["a", "b", "d", "b", "c"], &["a", "b", "c"]),
+      vec![
+        DiffItem::Match { lhs: 0, rhs: 0, len: 2 },
+        DiffItem::Mutation {
+          lhs_pos: 2,
+          lhs_len: 2,
+          rhs_pos: 2,
+          rhs_len: 0,
+        },
+        DiffItem::Match { lhs: 4, rhs: 2, len: 1 },
+      ]
     );
   }
 }
