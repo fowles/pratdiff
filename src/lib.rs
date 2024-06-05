@@ -16,30 +16,81 @@ pub enum DiffItem {
   },
 }
 
-impl DiffItem {
-  fn offset(&self, l: usize, r: usize) -> DiffItem {
-    let mut copy = *self;
-    match &mut copy {
-      DiffItem::Mutation { lhs_pos: lhs, rhs_pos: rhs, .. }
-      | DiffItem::Match { lhs, rhs, .. } => {
-        *lhs += l;
-        *rhs += r;
-      }
-    };
-    copy
-  }
+use DiffItem::*;
 
-  fn grow(&mut self, size: usize) {
-    match self {
-      DiffItem::Match { len, .. } => {
-        *len += size;
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Diffs {
+  vec: Vec<DiffItem>,
+}
+
+impl Diffs {
+  fn add_match(&mut self, len: usize) {
+    if len == 0 {
+      return;
+    }
+
+    match self.vec.last_mut() {
+      Some(Match { len: match_len, .. }) => {
+        *match_len += len;
       }
-      DiffItem::Mutation { lhs_len, rhs_len, .. } => {
-        *lhs_len += size;
-        *rhs_len += size;
+      _ => {
+        self.vec.push(Match {
+          lhs: self.lhs_pos(),
+          rhs: self.rhs_pos(),
+          len,
+        });
       }
     }
   }
+
+  fn add_mutation(&mut self, lhs: usize, rhs: usize) {
+    if lhs == 0 && rhs == 0 {
+      return;
+    }
+
+    match self.vec.last_mut() {
+      Some(Mutation { lhs_len, rhs_len, .. }) => {
+        *lhs_len += lhs;
+        *rhs_len += rhs;
+      }
+      _ => {
+        self.vec.push(Mutation {
+          lhs_pos: self.lhs_pos(),
+          lhs_len: lhs,
+          rhs_pos: self.rhs_pos(),
+          rhs_len: rhs,
+        });
+      }
+    }
+  }
+
+  fn lhs_pos(&self) -> usize {
+    match self.vec.last() {
+      None => 0,
+      Some(Match { lhs, len, .. }) => lhs + len,
+      Some(Mutation { lhs_pos, lhs_len, .. }) => lhs_pos + lhs_len,
+    }
+  }
+
+  fn rhs_pos(&self) -> usize {
+    match self.vec.last() {
+      None => 0,
+      Some(Match { rhs, len, .. }) => rhs + len,
+      Some(Mutation { rhs_pos, rhs_len, .. }) => rhs_pos + rhs_len,
+    }
+  }
+}
+
+pub fn diff_lines(lhs: &str, rhs: &str) -> Vec<DiffItem> {
+  let lhs_lines: Vec<_> = lhs.lines().collect();
+  let rhs_lines: Vec<_> = rhs.lines().collect();
+  diff(&lhs_lines, &rhs_lines)
+}
+
+pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
+  let mut d = Diffs::default();
+  accumulate_partitions(&mut d, &lhs, &rhs);
+  d.vec
 }
 
 // Patience diff algorithm
@@ -51,38 +102,21 @@ impl DiffItem {
 // 3. Find all lines which occur exactly once on both sides, then do longest
 //    common subsequence on those lines, matching them up.
 // 4. Do steps 1-2 on each section between matched lines.
-pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
-  let mut r = Vec::new();
+pub fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
   let leading = leading_match_len(lhs, rhs);
-  if leading != 0 {
-    r.push(DiffItem::Match { lhs: 0, rhs: 0, len: leading });
-  }
-
+  diffs.add_match(leading);
   if leading == lhs.len() && leading == rhs.len() {
-    return r;
+    return;
   }
 
   let trailing =
     trailing_match_len(&lhs[leading..lhs.len()], &rhs[leading..rhs.len()]);
-
-  r.extend(
-    partition(
-      &lhs[leading..lhs.len() - trailing],
-      &rhs[leading..rhs.len() - trailing],
-    )
-    .iter()
-    .map(|d| d.offset(leading, leading)),
+  accumulate_partitions(
+    diffs,
+    &lhs[leading..lhs.len() - trailing],
+    &rhs[leading..rhs.len() - trailing],
   );
-
-  if trailing != 0 {
-    r.push(DiffItem::Match {
-      lhs: lhs.len() - trailing,
-      rhs: rhs.len() - trailing,
-      len: trailing,
-    });
-  }
-
-  r
+  diffs.add_match(trailing);
 }
 
 fn leading_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
@@ -95,44 +129,26 @@ fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
     .count()
 }
 
-fn partition(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
+fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
   let matched = (1..5) // 5 selected arbitrarily
     .filter_map(|i| match_lines(i, lhs, rhs))
     .next()
     .unwrap_or_default();
   if matched.is_empty() {
-    return vec![DiffItem::Mutation {
-      lhs_pos: 0,
-      lhs_len: lhs.len(),
-      rhs_pos: 0,
-      rhs_len: rhs.len(),
-    }];
+    diffs.add_mutation(lhs.len(), rhs.len());
+    return;
   }
   let matched = longest_common_subseq(&matched);
 
-  let mut r = Vec::<DiffItem>::new();
   let mut lhs_pos: usize = 0;
   let mut rhs_pos: usize = 0;
-  for &(lhs_next, rhs_next) in matched.iter() {
-    if lhs_pos == lhs_next && rhs_pos == rhs_next {
-      r.last_mut().unwrap().grow(1);
-    } else {
-      r.extend(
-        diff(&lhs[lhs_pos..lhs_next], &rhs[rhs_pos..rhs_next])
-          .iter()
-          .map(|d| d.offset(lhs_pos, rhs_pos)),
-      );
-      r.push(DiffItem::Match { lhs: lhs_next, rhs: rhs_next, len: 1 });
-    }
+  for (lhs_next, rhs_next) in matched {
+    accumulate_diffs(diffs, &lhs[lhs_pos..lhs_next], &rhs[rhs_pos..rhs_next]);
+    diffs.add_match(1);
     lhs_pos = lhs_next + 1;
     rhs_pos = rhs_next + 1;
   }
-  r.extend(
-    diff(&lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()])
-      .iter()
-      .map(|d| d.offset(lhs_pos, rhs_pos)),
-  );
-  r
+  accumulate_diffs(diffs, &lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()]);
 }
 
 fn match_lines(
@@ -140,7 +156,7 @@ fn match_lines(
   lhs: &[&str],
   rhs: &[&str],
 ) -> Option<Vec<(usize, usize)>> {
-  let mut m = HashMap::<&str, (Vec<usize>, Vec<usize>)>::new();
+  let mut m: HashMap<&str, (Vec<usize>, Vec<usize>)> = HashMap::new();
   for (i, l) in lhs.iter().enumerate() {
     m.entry(l).or_default().0.push(i);
   }
@@ -206,7 +222,7 @@ mod tests {
   fn diff_eq() {
     assert_eq!(
       diff(&["a", "b", "c"], &["a", "b", "c"]),
-      vec![DiffItem::Match { lhs: 0, rhs: 0, len: 3 }]
+      vec![Match { lhs: 0, rhs: 0, len: 3 }]
     );
   }
 
@@ -215,52 +231,52 @@ mod tests {
     assert_eq!(
       diff(&["a", "b", "c"], &["a", "c"]),
       vec![
-        DiffItem::Match { lhs: 0, rhs: 0, len: 1 },
-        DiffItem::Mutation {
+        Match { lhs: 0, rhs: 0, len: 1 },
+        Mutation {
           lhs_pos: 1,
           lhs_len: 1,
           rhs_pos: 1,
           rhs_len: 0,
         },
-        DiffItem::Match { lhs: 2, rhs: 1, len: 1 },
+        Match { lhs: 2, rhs: 1, len: 1 },
       ]
     );
     assert_eq!(
       diff(&["z", "a", "b", "c"], &["a", "c"]),
       vec![
-        DiffItem::Mutation {
+        Mutation {
           lhs_pos: 0,
           lhs_len: 1,
           rhs_pos: 0,
           rhs_len: 0,
         },
-        DiffItem::Match { lhs: 1, rhs: 0, len: 1 },
-        DiffItem::Mutation {
+        Match { lhs: 1, rhs: 0, len: 1 },
+        Mutation {
           lhs_pos: 2,
           lhs_len: 1,
           rhs_pos: 1,
           rhs_len: 0,
         },
-        DiffItem::Match { lhs: 3, rhs: 1, len: 1 },
+        Match { lhs: 3, rhs: 1, len: 1 },
       ]
     );
     assert_eq!(
       diff(&["z", "a", "e", "b", "c"], &["a", "e", "c"]),
       vec![
-        DiffItem::Mutation {
+        Mutation {
           lhs_pos: 0,
           lhs_len: 1,
           rhs_pos: 0,
           rhs_len: 0,
         },
-        DiffItem::Match { lhs: 1, rhs: 0, len: 2 },
-        DiffItem::Mutation {
+        Match { lhs: 1, rhs: 0, len: 2 },
+        Mutation {
           lhs_pos: 3,
           lhs_len: 1,
           rhs_pos: 2,
           rhs_len: 0,
         },
-        DiffItem::Match { lhs: 4, rhs: 2, len: 1 },
+        Match { lhs: 4, rhs: 2, len: 1 },
       ]
     );
   }
@@ -270,14 +286,14 @@ mod tests {
     assert_eq!(
       diff(&["a", "b", "b", "c"], &["b", "b"]),
       vec![
-        DiffItem::Mutation {
+        Mutation {
           lhs_pos: 0,
           lhs_len: 1,
           rhs_pos: 0,
           rhs_len: 0,
         },
-        DiffItem::Match { lhs: 1, rhs: 0, len: 2 },
-        DiffItem::Mutation {
+        Match { lhs: 1, rhs: 0, len: 2 },
+        Mutation {
           lhs_pos: 3,
           lhs_len: 1,
           rhs_pos: 2,
@@ -331,14 +347,39 @@ mod tests {
     assert_eq!(
       diff(&["a", "b", "d", "b", "c"], &["a", "b", "c"]),
       vec![
-        DiffItem::Match { lhs: 0, rhs: 0, len: 2 },
-        DiffItem::Mutation {
+        Match { lhs: 0, rhs: 0, len: 2 },
+        Mutation {
           lhs_pos: 2,
           lhs_len: 2,
           rhs_pos: 2,
           rhs_len: 0,
         },
-        DiffItem::Match { lhs: 4, rhs: 2, len: 1 },
+        Match { lhs: 4, rhs: 2, len: 1 },
+      ]
+    );
+  }
+
+  #[test]
+  fn lead_move_txt() {
+    assert_eq!(
+      diff_lines(
+        include_str!("testdata/move.v0.txt"),
+        include_str!("testdata/move.v1.txt"),
+      ),
+      vec![
+        Mutation {
+          lhs_pos: 0,
+          lhs_len: 8,
+          rhs_pos: 0,
+          rhs_len: 0,
+        },
+        Match { lhs: 8, rhs: 0, len: 8 },
+        Mutation {
+          lhs_pos: 16,
+          lhs_len: 0,
+          rhs_pos: 8,
+          rhs_len: 8,
+        },
       ]
     );
   }

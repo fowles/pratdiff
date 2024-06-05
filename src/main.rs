@@ -32,9 +32,7 @@ fn type_suffix(f: &Contents) -> &'static str {
 }
 
 fn print_diff(lhs: &str, rhs: &str) {
-  let lhs_lines: Vec<_> = lhs.lines().collect();
-  let rhs_lines: Vec<_> = rhs.lines().collect();
-  let d = pratdiff::diff(&lhs_lines, &rhs_lines);
+  let d = pratdiff::diff_lines(lhs, rhs);
   println!("{:?}", d);
 }
 
