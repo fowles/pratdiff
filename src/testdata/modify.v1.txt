@@ -1,0 +1,7 @@
+void func_better() {
+  x += 1
+}
+
+void func_worse() {
+  x += 2
+}
