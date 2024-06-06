@@ -6,12 +6,28 @@ use pratdiff::DiffItem::*;
 use std::fmt::Display;
 use std::io::Write;
 
-pub struct Printer {
+struct Styles {
   header: Style,
   separator: Style,
   both: Style,
   old: Style,
   new: Style,
+}
+
+impl Styles {
+  fn default() -> Styles {
+    Styles {
+      header: Style::new().bold().white(),
+      separator: Style::new().cyan(),
+      both: Style::new().default_color(),
+      old: Style::new().red(),
+      new: Style::new().green(),
+    }
+  }
+}
+
+pub struct Printer {
+  styles: Styles,
   writer: Box<dyn Write>,
   context: usize,
 }
@@ -19,11 +35,7 @@ pub struct Printer {
 impl Printer {
   pub fn default(writer: Box<dyn Write>, context: usize) -> Printer {
     Printer {
-      header: Style::new().bold().white(),
-      separator: Style::new().cyan(),
-      both: Style::new().default_color(),
-      old: Style::new().red(),
-      new: Style::new().green(),
+      styles: Styles::default(),
       writer,
       context,
     }
@@ -39,9 +51,9 @@ impl Printer {
     writeln!(
       self.writer,
       "Files {}{} and {}{} differ",
-      lhs.style(self.old),
+      lhs.style(self.styles.old),
       binary_suffix(lhs_is_binary),
-      rhs.style(self.new),
+      rhs.style(self.styles.new),
       binary_suffix(rhs_is_binary),
     );
   }
@@ -50,14 +62,14 @@ impl Printer {
     writeln!(
       self.writer,
       "{} {}",
-      "---".style(self.old),
-      lhs.style(self.header)
+      "---".style(self.styles.old),
+      lhs.style(self.styles.header),
     );
     writeln!(
       self.writer,
       "{} {}",
-      "+++".style(self.new),
-      rhs.style(self.header)
+      "+++".style(self.styles.new),
+      rhs.style(self.styles.header)
     );
   }
 
@@ -75,20 +87,28 @@ impl Printer {
     match *diff {
       Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
         for line in &lhs[lhs_pos..lhs_pos + lhs_len] {
-          writeln!(self.writer, "{}", format!("-{}", line).style(self.old));
+          writeln!(
+            self.writer,
+            "{}",
+            format!("-{}", line).style(self.styles.old)
+          );
         }
         for line in &rhs[rhs_pos..rhs_pos + rhs_len] {
-          writeln!(self.writer, "{}", format!("+{}", line).style(self.new));
+          writeln!(
+            self.writer,
+            "{}",
+            format!("+{}", line).style(self.styles.new)
+          );
         }
       }
       Match { lhs: lhs_pos, rhs: rhs_pos, len } => {
         if len <= 2 * self.context {
           for line in &lhs[lhs_pos..lhs_pos + len] {
-            writeln!(self.writer, " {}", line.style(self.both));
+            writeln!(self.writer, " {}", line.style(self.styles.both));
           }
         } else {
           for line in &lhs[lhs_pos..lhs_pos + self.context] {
-            writeln!(self.writer, " {}", line.style(self.both));
+            writeln!(self.writer, " {}", line.style(self.styles.both));
           }
           writeln!(
             self.writer,
@@ -100,10 +120,10 @@ impl Printer {
               rhs_pos + self.context,
               0
             )
-            .style(self.separator)
+            .style(self.styles.separator)
           );
           for line in &lhs[lhs_pos + len - self.context..lhs_pos + len] {
-            writeln!(self.writer, " {}", line.style(self.both));
+            writeln!(self.writer, " {}", line.style(self.styles.both));
           }
         }
       }
