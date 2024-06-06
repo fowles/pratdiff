@@ -1,6 +1,5 @@
 #![allow(unused)] // TODO(kfm): remove this
 
-use anstream::println;
 use owo_colors::{OwoColorize, Style, Styled};
 use pratdiff::DiffItem;
 use pratdiff::DiffItem::*;
@@ -37,7 +36,8 @@ impl Printer {
     rhs: &dyn Display,
     rhs_is_binary: bool,
   ) {
-    println!(
+    writeln!(
+      self.writer,
       "Files {}{} and {}{} differ",
       lhs.style(self.old),
       binary_suffix(lhs_is_binary),
