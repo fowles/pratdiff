@@ -18,6 +18,88 @@ pub enum DiffItem {
 
 use DiffItem::*;
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Hunk {
+  diffs: Vec<DiffItem>,
+}
+
+impl Hunk {
+  pub fn build(context: usize, diffs: &[DiffItem]) -> Vec<Hunk> {
+    let mut res: Vec<Hunk> = Vec::new();
+    res.push(Hunk { diffs: Vec::new() });
+
+    for d in diffs {
+      res.last_mut().unwrap().diffs.push(*d);
+
+      if matches!(d, Match { len, .. } if *len > 2 * context) {
+        res.push(Hunk { diffs: vec![*d] });
+      }
+    }
+
+    res
+      .into_iter()
+      .filter_map(|mut hunk| {
+        if hunk.diffs.len() <= 1 {
+          return None;
+        }
+        if let Some(Match { lhs, rhs, len }) = hunk.diffs.first_mut() {
+          if *len > context {
+            *lhs += *len - context;
+            *rhs += *len - context;
+            *len = context;
+          }
+        }
+        if let Some(Match { lhs, rhs, len }) = hunk.diffs.last_mut() {
+          if *len > context {
+            *lhs += *len - context;
+            *rhs += *len - context;
+            *len = context;
+          }
+        }
+        Some(hunk)
+      })
+      .collect()
+  }
+
+  pub fn lhs_pos(&self) -> usize {
+    match self.diffs.first() {
+      Some(Match { lhs, .. }) => *lhs,
+      Some(Mutation { lhs_pos, .. }) => *lhs_pos,
+      _ => 0,
+    }
+  }
+
+  pub fn lhs_len(&self) -> usize {
+    self
+      .diffs
+      .iter()
+      .map(|&d| match d {
+        Match { len, .. } => len,
+        Mutation { lhs_len, .. } => lhs_len,
+      })
+      .sum()
+  }
+
+  pub fn rhs_pos(&self) -> usize {
+    match self.diffs.first() {
+      Some(Match { rhs, .. }) => *rhs,
+      Some(Mutation { rhs_pos, .. }) => *rhs_pos,
+      _ => 0,
+    }
+  }
+
+  pub fn rhs_len(&self) -> usize {
+    self
+      .diffs
+      .iter()
+      .map(|&d| match d {
+        Match { len, .. } => len,
+        Mutation { rhs_len, .. } => rhs_len,
+      })
+      .sum()
+  }
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 struct Diffs {
   vec: Vec<DiffItem>,
@@ -373,6 +455,22 @@ mod tests {
           rhs_len: 8,
         },
       ]
+    );
+  }
+
+  #[test]
+  fn build_hunks() {
+    let diff = diff_lines(
+      include_str!("testdata/move.v0.txt"),
+      include_str!("testdata/move.v1.txt"),
+    );
+    let hunks = Hunk::build(3, &diff);
+    assert_eq!(
+      hunks
+        .iter()
+        .map(|h| ((h.lhs_pos(), h.lhs_len()), (h.rhs_pos(), h.rhs_len())))
+        .collect::<Vec<_>>(),
+      vec![((0, 11), (0, 3)), ((13, 3), (5, 11))]
     );
   }
 }
