@@ -42,6 +42,12 @@ impl Hunk {
         if hunk.diffs.len() <= 1 {
           return None;
         }
+
+        if context == 0 {
+          hunk.diffs.retain(|&d| matches!(d, Mutation { .. }));
+          return Some(hunk);
+        }
+
         if let Some(Match { lhs, rhs, len }) = hunk.diffs.first_mut() {
           if *len > context {
             *lhs += *len - context;
@@ -458,19 +464,26 @@ mod tests {
     );
   }
 
+  fn hunk_positions(hunks: &[Hunk]) -> Vec<((usize, usize), (usize, usize))> {
+    hunks
+      .iter()
+      .map(|h| ((h.lhs_pos() + 1, h.lhs_len()), (h.rhs_pos() + 1, h.rhs_len())))
+      .collect::<Vec<_>>()
+  }
+
   #[test]
   fn build_hunks() {
     let diff = diff_lines(
       include_str!("testdata/move.v0.txt"),
       include_str!("testdata/move.v1.txt"),
     );
-    let hunks = Hunk::build(3, &diff);
     assert_eq!(
-      hunks
-        .iter()
-        .map(|h| ((h.lhs_pos(), h.lhs_len()), (h.rhs_pos(), h.rhs_len())))
-        .collect::<Vec<_>>(),
-      vec![((0, 11), (0, 3)), ((13, 3), (5, 11))]
+      hunk_positions(&Hunk::build(3, &diff)),
+      vec![((1, 11), (1, 3)), ((14, 3), (6, 11))]
+    );
+    assert_eq!(
+      hunk_positions(&Hunk::build(0, &diff)),
+      vec![((1, 8), (1, 0)), ((17, 0), (9, 8))]
     );
   }
 }
