@@ -20,7 +20,7 @@ use DiffItem::*;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Hunk {
-  diffs: Vec<DiffItem>,
+  pub diffs: Vec<DiffItem>,
 }
 
 impl Hunk {

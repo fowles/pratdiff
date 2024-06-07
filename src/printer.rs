@@ -3,6 +3,7 @@
 use owo_colors::{OwoColorize, Style, Styled};
 use pratdiff::DiffItem;
 use pratdiff::DiffItem::*;
+use pratdiff::Hunk;
 use std::fmt::Display;
 use std::io::Write;
 
@@ -77,57 +78,78 @@ impl Printer {
     let lhs: Vec<_> = lhs_all.lines().collect();
     let rhs: Vec<_> = rhs_all.lines().collect();
     let diffs = pratdiff::diff(&lhs, &rhs);
+    let hunks = Hunk::build(self.context, &diffs);
 
-    for diff in diffs {
-      self.print_lines(&lhs, &rhs, &diff);
+    for h in hunks {
+      self.print_hunk_header(&h);
+      self.print_hunk_body(&lhs, &rhs, &h.diffs);
     }
   }
 
-  fn print_lines(&mut self, lhs: &[&str], rhs: &[&str], diff: &DiffItem) {
-    match *diff {
-      Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
-        for line in &lhs[lhs_pos..lhs_pos + lhs_len] {
-          writeln!(
-            self.writer,
-            "{}",
-            format!("-{}", line).style(self.styles.old)
+  fn print_hunk_header(&mut self, h: &Hunk) {
+    writeln!(
+      self.writer,
+      "{}",
+      format!(
+        "@@ -{},{} +{},{}  @@",
+        h.lhs_pos() + 1,
+        h.lhs_len(),
+        h.rhs_pos() + 1,
+        h.rhs_len()
+      )
+      .style(self.styles.separator)
+    );
+  }
+
+  fn print_hunk_body(
+    &mut self,
+    lhs: &[&str],
+    rhs: &[&str],
+    diffs: &[DiffItem],
+  ) {
+    for d in diffs {
+      match *d {
+        Mutation { lhs_pos, lhs_len, rhs_len: 0, .. } => {
+          self.print_deletion(&lhs[lhs_pos..lhs_pos + lhs_len]);
+        }
+        Mutation { rhs_pos, rhs_len, lhs_len: 0, .. } => {
+          self.print_insertion(&rhs[rhs_pos..rhs_pos + rhs_len]);
+        }
+        Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
+          self.print_mutation(
+            &lhs[lhs_pos..lhs_pos + lhs_len],
+            &rhs[rhs_pos..rhs_pos + rhs_len],
           );
         }
-        for line in &rhs[rhs_pos..rhs_pos + rhs_len] {
-          writeln!(
-            self.writer,
-            "{}",
-            format!("+{}", line).style(self.styles.new)
-          );
-        }
-      }
-      Match { lhs: lhs_pos, rhs: rhs_pos, len } => {
-        if len <= 2 * self.context {
-          for line in &lhs[lhs_pos..lhs_pos + len] {
-            writeln!(self.writer, " {}", line.style(self.styles.both));
-          }
-        } else {
-          for line in &lhs[lhs_pos..lhs_pos + self.context] {
-            writeln!(self.writer, " {}", line.style(self.styles.both));
-          }
-          writeln!(
-            self.writer,
-            "{}",
-            format!(
-              "@@ -{},{} +{},{}  @@",
-              lhs_pos + self.context,
-              0,
-              rhs_pos + self.context,
-              0
-            )
-            .style(self.styles.separator)
-          );
-          for line in &lhs[lhs_pos + len - self.context..lhs_pos + len] {
-            writeln!(self.writer, " {}", line.style(self.styles.both));
-          }
+        Match { lhs: lhs_pos, len, .. } => {
+          self.print_match(&lhs[lhs_pos..lhs_pos + len]);
         }
       }
     }
+  }
+
+  fn print_match(&mut self, lines: &[&str]) {
+    for line in lines {
+      writeln!(self.writer, " {}", line.style(self.styles.both));
+    }
+  }
+
+  fn print_deletion(&mut self, lines: &[&str]) {
+    for line in lines {
+      writeln!(self.writer, "{}", format!("-{}", line).style(self.styles.old));
+    }
+  }
+
+  fn print_insertion(&mut self, lines: &[&str]) {
+    for line in lines {
+      writeln!(self.writer, "{}", format!("+{}", line).style(self.styles.new));
+    }
+  }
+
+  fn print_mutation(&mut self, lhs: &[&str], rhs: &[&str]) {
+    // TODO(kfm): token level diffing
+    self.print_deletion(&lhs);
+    self.print_insertion(&rhs);
   }
 }
 
