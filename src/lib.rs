@@ -25,8 +25,7 @@ pub struct Hunk {
 
 impl Hunk {
   pub fn build(context: usize, diffs: &[DiffItem]) -> Vec<Hunk> {
-    let mut res: Vec<Hunk> = Vec::new();
-    res.push(Hunk { diffs: Vec::new() });
+    let mut res = vec![Hunk { diffs: Vec::new() }];
 
     for d in diffs {
       res.last_mut().unwrap().diffs.push(*d);
