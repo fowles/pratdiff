@@ -4,6 +4,7 @@ use owo_colors::{OwoColorize, Style, Styled};
 use pratdiff::DiffItem;
 use pratdiff::DiffItem::*;
 use pratdiff::Hunk;
+use regex::Regex;
 use std::fmt::Display;
 use std::io::Write;
 
@@ -12,7 +13,9 @@ struct Styles {
   separator: Style,
   both: Style,
   old: Style,
+  old_dim: Style,
   new: Style,
+  new_dim: Style,
 }
 
 impl Styles {
@@ -23,6 +26,8 @@ impl Styles {
       both: Style::new().default_color(),
       old: Style::new().red(),
       new: Style::new().green(),
+      old_dim: Style::new().dimmed(),
+      new_dim: Style::new().default_color(),
     }
   }
 }
@@ -146,10 +151,63 @@ impl Printer {
     }
   }
 
-  fn print_mutation(&mut self, lhs: &[&str], rhs: &[&str]) {
-    // TODO(kfm): token level diffing
-    self.print_deletion(&lhs);
-    self.print_insertion(&rhs);
+  fn print_mutation(&mut self, lhs_lines: &[&str], rhs_lines: &[&str]) {
+    let re = Regex::new(r"\b").unwrap();
+    let tokenize = |&line| re.split(line).chain(std::iter::once("\n"));
+
+    let mut lhs_tokens: Vec<_> = lhs_lines.iter().flat_map(tokenize).collect();
+    lhs_tokens.pop();
+
+    let mut rhs_tokens: Vec<_> = rhs_lines.iter().flat_map(tokenize).collect();
+    rhs_tokens.pop();
+
+    let diffs = pratdiff::diff(&lhs_tokens, &rhs_tokens);
+
+    write!(self.writer, "{}", "-".style(self.styles.old));
+    for d in &diffs {
+      match d {
+        &Match { lhs, len, .. } => {
+          for &t in &lhs_tokens[lhs..lhs + len] {
+            write!(self.writer, "{}", t.style(self.styles.old_dim));
+            if t == "\n" {
+              write!(self.writer, "{}", "-".style(self.styles.old));
+            }
+          }
+        }
+        &Mutation { lhs_pos, lhs_len, .. } => {
+          for &t in &lhs_tokens[lhs_pos..lhs_pos + lhs_len] {
+            write!(self.writer, "{}", t.style(self.styles.old));
+            if t == "\n" {
+              write!(self.writer, "{}", "-".style(self.styles.old));
+            }
+          }
+        }
+      }
+    }
+    write!(self.writer, "\n");
+
+    write!(self.writer, "{}", "+".style(self.styles.new));
+    for d in &diffs {
+      match d {
+        &Match { rhs, len, .. } => {
+          for &t in &rhs_tokens[rhs..rhs + len] {
+            write!(self.writer, "{}", t.style(self.styles.new_dim));
+            if t == "\n" {
+              write!(self.writer, "{}", "+".style(self.styles.new));
+            }
+          }
+        }
+        &Mutation { rhs_pos, rhs_len, .. } => {
+          for &t in &rhs_tokens[rhs_pos..rhs_pos + rhs_len] {
+            write!(self.writer, "{}", t.style(self.styles.new));
+            if t == "\n" {
+              write!(self.writer, "{}", "+".style(self.styles.new));
+            }
+          }
+        }
+      }
+    }
+    write!(self.writer, "\n");
   }
 }
 
