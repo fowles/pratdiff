@@ -10,8 +10,8 @@ pub enum Contents {
 impl Contents {
   pub fn as_bytes(&self) -> &[u8] {
     match self {
-      Contents::Text(s) => &s.as_bytes(),
-      Contents::Binary(v) => &v,
+      Contents::Text(s) => s.as_bytes(),
+      Contents::Binary(v) => v,
     }
   }
 }
@@ -30,7 +30,7 @@ pub fn read(path: &Path) -> Result<Contents, Box<dyn Error>> {
   let mut buffer = Vec::new();
   file.read_to_end(&mut buffer)?;
 
-  if let Ok(_) = std::str::from_utf8(&buffer) {
+  if std::str::from_utf8(&buffer).is_ok() {
     unsafe { Ok(Contents::Text(String::from_utf8_unchecked(buffer))) }
   } else {
     Ok(Contents::Binary(buffer))

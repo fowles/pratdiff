@@ -108,26 +108,24 @@ impl Printer {
 
   fn print_hunk_body(
     &mut self,
-    lhs: &[&str],
-    rhs: &[&str],
+    lhs_lines: &[&str],
+    rhs_lines: &[&str],
     diffs: &[DiffItem],
   ) {
     for d in diffs {
-      match *d {
-        Mutation { lhs_pos, lhs_len, rhs_len: 0, .. } => {
-          self.print_deletion(&lhs[lhs_pos..lhs_pos + lhs_len]);
+      match &d {
+        Mutation { lhs, rhs } => {
+          if (rhs.is_empty()) {
+            self.print_deletion(&lhs_lines[lhs.clone()]);
+          } else if (lhs.is_empty()) {
+            self.print_insertion(&rhs_lines[rhs.clone()]);
+          } else {
+            self
+              .print_mutation(&lhs_lines[lhs.clone()], &rhs_lines[rhs.clone()]);
+          }
         }
-        Mutation { rhs_pos, rhs_len, lhs_len: 0, .. } => {
-          self.print_insertion(&rhs[rhs_pos..rhs_pos + rhs_len]);
-        }
-        Mutation { lhs_pos, lhs_len, rhs_pos, rhs_len } => {
-          self.print_mutation(
-            &lhs[lhs_pos..lhs_pos + lhs_len],
-            &rhs[rhs_pos..rhs_pos + rhs_len],
-          );
-        }
-        Match { lhs: lhs_pos, len, .. } => {
-          self.print_match(&lhs[lhs_pos..lhs_pos + len]);
+        Match { lhs, .. } => {
+          self.print_match(&lhs_lines[lhs.clone()]);
         }
       }
     }
@@ -165,17 +163,17 @@ impl Printer {
 
     write!(self.writer, "{}", "-".style(self.styles.old));
     for d in &diffs {
-      match d {
-        &Match { lhs, len, .. } => {
-          for &t in &lhs_tokens[lhs..lhs + len] {
+      match &d {
+        Match { lhs, .. } => {
+          for &t in &lhs_tokens[lhs.clone()] {
             write!(self.writer, "{}", t.style(self.styles.old_dim));
             if t == "\n" {
               write!(self.writer, "{}", "-".style(self.styles.old));
             }
           }
         }
-        &Mutation { lhs_pos, lhs_len, .. } => {
-          for &t in &lhs_tokens[lhs_pos..lhs_pos + lhs_len] {
+        Mutation { lhs, .. } => {
+          for &t in &lhs_tokens[lhs.clone()] {
             write!(self.writer, "{}", t.style(self.styles.old));
             if t == "\n" {
               write!(self.writer, "{}", "-".style(self.styles.old));
@@ -184,21 +182,21 @@ impl Printer {
         }
       }
     }
-    write!(self.writer, "\n");
+    writeln!(self.writer);
 
     write!(self.writer, "{}", "+".style(self.styles.new));
     for d in &diffs {
-      match d {
-        &Match { rhs, len, .. } => {
-          for &t in &rhs_tokens[rhs..rhs + len] {
+      match &d {
+        Match { rhs, .. } => {
+          for &t in &rhs_tokens[rhs.clone()] {
             write!(self.writer, "{}", t.style(self.styles.new_dim));
             if t == "\n" {
               write!(self.writer, "{}", "+".style(self.styles.new));
             }
           }
         }
-        &Mutation { rhs_pos, rhs_len, .. } => {
-          for &t in &rhs_tokens[rhs_pos..rhs_pos + rhs_len] {
+        Mutation { rhs, ..} => {
+          for &t in &rhs_tokens[rhs.clone()] {
             write!(self.writer, "{}", t.style(self.styles.new));
             if t == "\n" {
               write!(self.writer, "{}", "+".style(self.styles.new));
@@ -207,7 +205,7 @@ impl Printer {
         }
       }
     }
-    write!(self.writer, "\n");
+    writeln!(self.writer);
   }
 }
 

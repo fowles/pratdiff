@@ -1,22 +1,43 @@
 use std::collections::HashMap;
 use std::iter::zip;
+use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Side {
+  Lhs,
+  Rhs,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DiffItem {
-  Match {
-    lhs: usize,
-    rhs: usize,
-    len: usize,
-  },
-  Mutation {
-    lhs_pos: usize,
-    lhs_len: usize,
-    rhs_pos: usize,
-    rhs_len: usize,
-  },
+  Match { lhs: Range<usize>, rhs: Range<usize> },
+  Mutation { lhs: Range<usize>, rhs: Range<usize> },
 }
 
 use DiffItem::*;
+
+impl DiffItem {
+  pub fn lhs(&self) -> Range<usize> {
+    match self {
+      Match { lhs, .. } => lhs.clone(),
+      Mutation { lhs, .. } => lhs.clone(),
+    }
+  }
+
+  pub fn rhs(&self) -> Range<usize> {
+    match self {
+      Match { rhs, .. } => rhs.clone(),
+      Mutation { rhs, .. } => rhs.clone(),
+    }
+  }
+
+  pub fn side(&self, side: Side) -> Range<usize> {
+    match side {
+      Side::Lhs => self.lhs(),
+      Side::Rhs => self.rhs(),
+    }
+  }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Hunk {
@@ -28,10 +49,10 @@ impl Hunk {
     let mut res = vec![Hunk { diffs: Vec::new() }];
 
     for d in diffs {
-      res.last_mut().unwrap().diffs.push(*d);
+      res.last_mut().unwrap().diffs.push(d.clone());
 
-      if matches!(d, Match { len, .. } if *len > 2 * context) {
-        res.push(Hunk { diffs: vec![*d] });
+      if matches!(d, Match { lhs, .. } if lhs.len() > 2 * context) {
+        res.push(Hunk { diffs: vec![d.clone()] });
       }
     }
 
@@ -43,22 +64,20 @@ impl Hunk {
         }
 
         if context == 0 {
-          hunk.diffs.retain(|&d| matches!(d, Mutation { .. }));
+          hunk.diffs.retain(|d| matches!(d, Mutation { .. }));
           return Some(hunk);
         }
 
-        if let Some(Match { lhs, rhs, len }) = hunk.diffs.first_mut() {
-          if *len > context {
-            *lhs += *len - context;
-            *rhs += *len - context;
-            *len = context;
+        if let Some(Match { lhs, rhs }) = hunk.diffs.first_mut() {
+          if lhs.len() > context {
+            lhs.start = lhs.end - context;
+            rhs.start = rhs.end - context;
           }
         }
-        if let Some(Match { lhs, rhs, len }) = hunk.diffs.last_mut() {
-          if *len > context {
-            *lhs += *len - context;
-            *rhs += *len - context;
-            *len = context;
+        if let Some(Match { lhs, rhs }) = hunk.diffs.last_mut() {
+          if lhs.len() > context {
+            lhs.end = lhs.start + context;
+            rhs.end = rhs.start + context;
           }
         }
         Some(hunk)
@@ -67,41 +86,19 @@ impl Hunk {
   }
 
   pub fn lhs_pos(&self) -> usize {
-    match self.diffs.first() {
-      Some(Match { lhs, .. }) => *lhs,
-      Some(Mutation { lhs_pos, .. }) => *lhs_pos,
-      _ => 0,
-    }
+    self.diffs.first().map_or(0, |d| d.lhs().start)
   }
 
   pub fn lhs_len(&self) -> usize {
-    self
-      .diffs
-      .iter()
-      .map(|&d| match d {
-        Match { len, .. } => len,
-        Mutation { lhs_len, .. } => lhs_len,
-      })
-      .sum()
+    self.diffs.iter().map(|d| d.lhs().len()).sum()
   }
 
   pub fn rhs_pos(&self) -> usize {
-    match self.diffs.first() {
-      Some(Match { rhs, .. }) => *rhs,
-      Some(Mutation { rhs_pos, .. }) => *rhs_pos,
-      _ => 0,
-    }
+    self.diffs.first().map_or(0, |d| d.rhs().start)
   }
 
   pub fn rhs_len(&self) -> usize {
-    self
-      .diffs
-      .iter()
-      .map(|&d| match d {
-        Match { len, .. } => len,
-        Mutation { rhs_len, .. } => rhs_len,
-      })
-      .sum()
+    self.diffs.iter().map(|d| d.rhs().len()).sum()
   }
 }
 
@@ -115,13 +112,19 @@ impl Diffs {
     if len == 0 {
       return;
     }
-    if let Some(Match { len: match_len, .. }) = self.vec.last_mut() {
-      *match_len += len;
+    if let Some(Match { lhs, rhs }) = self.vec.last_mut() {
+      lhs.end += len;
+      rhs.end += len;
     } else {
       self.vec.push(Match {
-        lhs: self.lhs_pos(),
-        rhs: self.rhs_pos(),
-        len,
+        lhs: Range {
+          start: self.lhs_pos(),
+          end: self.lhs_pos() + len,
+        },
+        rhs: Range {
+          start: self.rhs_pos(),
+          end: self.rhs_pos() + len,
+        },
       });
     }
   }
@@ -130,33 +133,29 @@ impl Diffs {
     if lhs == 0 && rhs == 0 {
       return;
     }
-    if let Some(Mutation { lhs_len, rhs_len, .. }) = self.vec.last_mut() {
-      *lhs_len += lhs;
-      *rhs_len += rhs;
+    if let Some(Mutation { lhs: l, rhs: r }) = self.vec.last_mut() {
+      l.end += lhs;
+      r.end += rhs;
     } else {
       self.vec.push(Mutation {
-        lhs_pos: self.lhs_pos(),
-        lhs_len: lhs,
-        rhs_pos: self.rhs_pos(),
-        rhs_len: rhs,
+        lhs: Range {
+          start: self.lhs_pos(),
+          end: self.lhs_pos() + lhs,
+        },
+        rhs: Range {
+          start: self.rhs_pos(),
+          end: self.rhs_pos() + rhs,
+        },
       });
     }
   }
 
   fn lhs_pos(&self) -> usize {
-    match self.vec.last() {
-      None => 0,
-      Some(Match { lhs, len, .. }) => lhs + len,
-      Some(Mutation { lhs_pos, lhs_len, .. }) => lhs_pos + lhs_len,
-    }
+    self.vec.last().map_or(0, |d| d.lhs().end)
   }
 
   fn rhs_pos(&self) -> usize {
-    match self.vec.last() {
-      None => 0,
-      Some(Match { rhs, len, .. }) => rhs + len,
-      Some(Mutation { rhs_pos, rhs_len, .. }) => rhs_pos + rhs_len,
-    }
+    self.vec.last().map_or(0, |d| d.rhs().end)
   }
 }
 
@@ -168,7 +167,7 @@ pub fn diff_lines(lhs: &str, rhs: &str) -> Vec<DiffItem> {
 
 pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
   let mut d = Diffs::default();
-  accumulate_partitions(&mut d, &lhs, &rhs);
+  accumulate_partitions(&mut d, lhs, rhs);
   d.vec
 }
 
@@ -246,8 +245,7 @@ fn match_lines(
   let mut v: Vec<(usize, usize)> = m
     .into_values()
     .filter(|(l, r)| l.len() == arity && r.len() == arity)
-    .map(|(l, r)| zip(l, r))
-    .flatten()
+    .flat_map(|(l, r)| zip(l, r))
     .collect();
   v.sort();
   if v.is_empty() {
@@ -301,7 +299,10 @@ mod tests {
   fn diff_eq() {
     assert_eq!(
       diff(&["a", "b", "c"], &["a", "b", "c"]),
-      vec![Match { lhs: 0, rhs: 0, len: 3 }]
+      vec![Match {
+        lhs: Range { start: 0, end: 3 },
+        rhs: Range { start: 0, end: 3 },
+      }]
     );
   }
 
@@ -310,52 +311,60 @@ mod tests {
     assert_eq!(
       diff(&["a", "b", "c"], &["a", "c"]),
       vec![
-        Match { lhs: 0, rhs: 0, len: 1 },
-        Mutation {
-          lhs_pos: 1,
-          lhs_len: 1,
-          rhs_pos: 1,
-          rhs_len: 0,
+        Match {
+          lhs: Range { start: 0, end: 1 },
+          rhs: Range { start: 0, end: 1 },
         },
-        Match { lhs: 2, rhs: 1, len: 1 },
+        Mutation {
+          lhs: Range { start: 1, end: 2 },
+          rhs: Range { start: 1, end: 1 },
+        },
+        Match {
+          lhs: Range { start: 2, end: 3 },
+          rhs: Range { start: 1, end: 2 },
+        },
       ]
     );
     assert_eq!(
       diff(&["z", "a", "b", "c"], &["a", "c"]),
       vec![
         Mutation {
-          lhs_pos: 0,
-          lhs_len: 1,
-          rhs_pos: 0,
-          rhs_len: 0,
+          lhs: Range { start: 0, end: 1 },
+          rhs: Range { start: 0, end: 0 },
         },
-        Match { lhs: 1, rhs: 0, len: 1 },
+        Match {
+          lhs: Range { start: 1, end: 2 },
+          rhs: Range { start: 0, end: 1 },
+        },
         Mutation {
-          lhs_pos: 2,
-          lhs_len: 1,
-          rhs_pos: 1,
-          rhs_len: 0,
+          lhs: Range { start: 2, end: 3 },
+          rhs: Range { start: 1, end: 1 },
         },
-        Match { lhs: 3, rhs: 1, len: 1 },
+        Match {
+          lhs: Range { start: 3, end: 4 },
+          rhs: Range { start: 1, end: 2 },
+        },
       ]
     );
     assert_eq!(
       diff(&["z", "a", "e", "b", "c"], &["a", "e", "c"]),
       vec![
         Mutation {
-          lhs_pos: 0,
-          lhs_len: 1,
-          rhs_pos: 0,
-          rhs_len: 0,
+          lhs: Range { start: 0, end: 1 },
+          rhs: Range { start: 0, end: 0 },
         },
-        Match { lhs: 1, rhs: 0, len: 2 },
+        Match {
+          lhs: Range { start: 1, end: 3 },
+          rhs: Range { start: 0, end: 2 },
+        },
         Mutation {
-          lhs_pos: 3,
-          lhs_len: 1,
-          rhs_pos: 2,
-          rhs_len: 0,
+          lhs: Range { start: 3, end: 4 },
+          rhs: Range { start: 2, end: 2 },
         },
-        Match { lhs: 4, rhs: 2, len: 1 },
+        Match {
+          lhs: Range { start: 4, end: 5 },
+          rhs: Range { start: 2, end: 3 },
+        },
       ]
     );
   }
@@ -366,17 +375,16 @@ mod tests {
       diff(&["a", "b", "b", "c"], &["b", "b"]),
       vec![
         Mutation {
-          lhs_pos: 0,
-          lhs_len: 1,
-          rhs_pos: 0,
-          rhs_len: 0,
+          lhs: Range { start: 0, end: 1 },
+          rhs: Range { start: 0, end: 0 },
         },
-        Match { lhs: 1, rhs: 0, len: 2 },
+        Match {
+          lhs: Range { start: 1, end: 3 },
+          rhs: Range { start: 0, end: 2 },
+        },
         Mutation {
-          lhs_pos: 3,
-          lhs_len: 1,
-          rhs_pos: 2,
-          rhs_len: 0,
+          lhs: Range { start: 3, end: 4 },
+          rhs: Range { start: 2, end: 2 },
         },
       ]
     );
@@ -426,14 +434,18 @@ mod tests {
     assert_eq!(
       diff(&["a", "b", "d", "b", "c"], &["a", "b", "c"]),
       vec![
-        Match { lhs: 0, rhs: 0, len: 2 },
-        Mutation {
-          lhs_pos: 2,
-          lhs_len: 2,
-          rhs_pos: 2,
-          rhs_len: 0,
+        Match {
+          lhs: Range { start: 0, end: 2 },
+          rhs: Range { start: 0, end: 2 },
         },
-        Match { lhs: 4, rhs: 2, len: 1 },
+        Mutation {
+          lhs: Range { start: 2, end: 4 },
+          rhs: Range { start: 2, end: 2 },
+        },
+        Match {
+          lhs: Range { start: 4, end: 5 },
+          rhs: Range { start: 2, end: 3 },
+        },
       ]
     );
   }
@@ -447,17 +459,16 @@ mod tests {
       ),
       vec![
         Mutation {
-          lhs_pos: 0,
-          lhs_len: 8,
-          rhs_pos: 0,
-          rhs_len: 0,
+          lhs: Range { start: 0, end: 8 },
+          rhs: Range { start: 0, end: 0 },
         },
-        Match { lhs: 8, rhs: 0, len: 8 },
+        Match {
+          lhs: Range { start: 8, end: 16 },
+          rhs: Range { start: 0, end: 8 },
+        },
         Mutation {
-          lhs_pos: 16,
-          lhs_len: 0,
-          rhs_pos: 8,
-          rhs_len: 8,
+          lhs: Range { start: 16, end: 16 },
+          rhs: Range { start: 8, end: 16 },
         },
       ]
     );
