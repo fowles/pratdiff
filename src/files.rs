@@ -1,19 +1,42 @@
+#![allow(unused)] // TODO(kfm): remove this
+
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+use walkdir::WalkDir;
 
-pub enum Contents {
-  Text(String),
-  Binary(Vec<u8>),
+use crate::printer::Printer;
+
+pub fn diff(
+  p: &mut Printer,
+  lhs: &Path,
+  rhs: &Path,
+) -> Result<(), Box<dyn Error>> {
+
+  Ok(())
 }
-impl Contents {
-  pub fn as_bytes(&self) -> &[u8] {
-    match self {
-      Contents::Text(s) => s.as_bytes(),
-      Contents::Binary(v) => v,
-    }
+
+pub fn diff_files(
+  p: &mut Printer,
+  lhs_path: &Path,
+  rhs_path: &Path,
+) -> Result<(), Box<dyn Error>> {
+  let lhs_raw = read(&lhs_path)?;
+  let rhs_raw = read(&rhs_path)?;
+  if lhs_raw == rhs_raw {
+    return Ok(());
   }
+
+  let (Ok(l), Ok(r)) = (String::from_utf8(lhs_raw), String::from_utf8(rhs_raw))
+  else {
+    p.print_binary_files_differ(&lhs_path.display(), &rhs_path.display());
+    return Ok(());
+  };
+
+  p.print_file_header(&lhs_path.display(), &rhs_path.display());
+  p.print_diff(&l, &r);
+  Ok(())
 }
 
 fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn Error>> {
@@ -24,15 +47,10 @@ fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn Error>> {
   }
 }
 
-pub fn read(path: &Path) -> Result<Contents, Box<dyn Error>> {
+fn read(path: &Path) -> Result<Vec<u8>, Box<dyn Error>> {
   let mut file = open(path)?;
 
   let mut buffer = Vec::new();
   file.read_to_end(&mut buffer)?;
-
-  if std::str::from_utf8(&buffer).is_ok() {
-    unsafe { Ok(Contents::Text(String::from_utf8_unchecked(buffer))) }
-  } else {
-    Ok(Contents::Binary(buffer))
-  }
+  Ok(buffer)
 }

@@ -475,8 +475,8 @@ mod tests {
   fn lead_move_txt() {
     assert_eq!(
       diff_lines(
-        include_str!("testdata/move.v0.txt"),
-        include_str!("testdata/move.v1.txt"),
+        include_str!("testdata/old/move.txt"),
+        include_str!("testdata/new/move.txt"),
       ),
       &[
         Mutation {
@@ -505,8 +505,8 @@ mod tests {
   #[test]
   fn build_hunks() {
     let diff = diff_lines(
-      include_str!("testdata/move.v0.txt"),
-      include_str!("testdata/move.v1.txt"),
+      include_str!("testdata/old/move.txt"),
+      include_str!("testdata/new/move.txt"),
     );
     assert_eq!(
       hunk_positions(&Hunk::build(3, &diff)),
