@@ -59,7 +59,7 @@ impl Hunk {
     res
       .into_iter()
       .filter_map(|mut hunk| {
-        if hunk.diffs.len() <= 1 {
+        if hunk.diffs.len() <= 1 && matches!(hunk.diffs[0], Match { ..}) {
           return None;
         }
 
