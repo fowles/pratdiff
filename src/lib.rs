@@ -292,14 +292,14 @@ mod tests {
 
   #[test]
   fn diff_empty() {
-    assert_eq!(diff(&[], &[]), vec![]);
+    assert_eq!(diff(&[], &[]), &[]);
   }
 
   #[test]
   fn diff_eq() {
     assert_eq!(
       diff(&["a", "b", "c"], &["a", "b", "c"]),
-      vec![Match {
+      &[Match {
         lhs: Range { start: 0, end: 3 },
         rhs: Range { start: 0, end: 3 },
       }]
@@ -310,7 +310,7 @@ mod tests {
   fn diff_ne() {
     assert_eq!(
       diff(&["a", "b", "c"], &["a", "c"]),
-      vec![
+      &[
         Match {
           lhs: Range { start: 0, end: 1 },
           rhs: Range { start: 0, end: 1 },
@@ -327,7 +327,7 @@ mod tests {
     );
     assert_eq!(
       diff(&["z", "a", "b", "c"], &["a", "c"]),
-      vec![
+      &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
           rhs: Range { start: 0, end: 0 },
@@ -348,7 +348,7 @@ mod tests {
     );
     assert_eq!(
       diff(&["z", "a", "e", "b", "c"], &["a", "e", "c"]),
-      vec![
+      &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
           rhs: Range { start: 0, end: 0 },
@@ -373,7 +373,7 @@ mod tests {
   fn diff_only_non_unique() {
     assert_eq!(
       diff(&["a", "b", "b", "c"], &["b", "b"]),
-      vec![
+      &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
           rhs: Range { start: 0, end: 0 },
@@ -425,7 +425,7 @@ mod tests {
         (11, 2),
         (12, 13),
       ]),
-      vec![(1, 4), (2, 6), (5, 7), (8, 10), (9, 11), (12, 13),]
+      &[(1, 4), (2, 6), (5, 7), (8, 10), (9, 11), (12, 13),]
     );
   }
 
@@ -433,7 +433,7 @@ mod tests {
   fn lead_trail_overlap() {
     assert_eq!(
       diff(&["a", "b", "d", "b", "c"], &["a", "b", "c"]),
-      vec![
+      &[
         Match {
           lhs: Range { start: 0, end: 2 },
           rhs: Range { start: 0, end: 2 },
@@ -457,7 +457,7 @@ mod tests {
         include_str!("testdata/move.v0.txt"),
         include_str!("testdata/move.v1.txt"),
       ),
-      vec![
+      &[
         Mutation {
           lhs: Range { start: 0, end: 8 },
           rhs: Range { start: 0, end: 0 },
@@ -489,11 +489,11 @@ mod tests {
     );
     assert_eq!(
       hunk_positions(&Hunk::build(3, &diff)),
-      vec![((1, 11), (1, 3)), ((14, 3), (6, 11))]
+      &[((1, 11), (1, 3)), ((14, 3), (6, 11))]
     );
     assert_eq!(
       hunk_positions(&Hunk::build(0, &diff)),
-      vec![((1, 8), (1, 0)), ((17, 0), (9, 8))]
+      &[((1, 8), (1, 0)), ((17, 0), (9, 8))]
     );
   }
 }

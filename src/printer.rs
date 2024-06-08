@@ -195,7 +195,7 @@ impl Printer {
             }
           }
         }
-        Mutation { rhs, ..} => {
+        Mutation { rhs, .. } => {
           for &t in &rhs_tokens[rhs.clone()] {
             write!(self.writer, "{}", t.style(self.styles.new));
             if t == "\n" {
