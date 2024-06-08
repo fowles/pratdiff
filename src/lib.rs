@@ -522,7 +522,10 @@ mod tests {
   fn tokenize() {
     assert_eq!(
       tokenize_lines(&["void func1() {", "  x += 1"]),
-      &["void", " ", "func1", "()", " ", "{", "\n", "  ", "x", " ", "+=", " ", "1"],
+      &[
+        "void", " ", "func1", "()", " ", "{", "\n", "  ", "x", " ", "+=", " ",
+        "1"
+      ],
     );
   }
 }

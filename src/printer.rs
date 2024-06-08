@@ -1,7 +1,6 @@
 use owo_colors::{OwoColorize, Style};
+use pratdiff::{Hunk, DiffItem, Side, diff, tokenize_lines};
 use pratdiff::DiffItem::*;
-use pratdiff::Hunk;
-use pratdiff::{DiffItem, Side};
 use std::fmt::Display;
 use std::io::Result;
 use std::io::Write;
@@ -82,7 +81,7 @@ impl Printer {
   pub fn print_diff(&mut self, lhs_all: &str, rhs_all: &str) -> Result<()> {
     let lhs: Vec<_> = lhs_all.lines().collect();
     let rhs: Vec<_> = rhs_all.lines().collect();
-    let diffs = pratdiff::diff(&lhs, &rhs);
+    let diffs = diff(&lhs, &rhs);
     let hunks = Hunk::build(self.context, &diffs);
 
     for h in hunks {
@@ -151,9 +150,9 @@ impl Printer {
     lhs_lines: &[&str],
     rhs_lines: &[&str],
   ) -> Result<()> {
-    let lhs_tokens = pratdiff::tokenize_lines(&lhs_lines);
-    let rhs_tokens = pratdiff::tokenize_lines(&rhs_lines);
-    let diffs = pratdiff::diff(&lhs_tokens, &rhs_tokens);
+    let lhs_tokens = tokenize_lines(lhs_lines);
+    let rhs_tokens = tokenize_lines(rhs_lines);
+    let diffs = diff(&lhs_tokens, &rhs_tokens);
     self.print_mutation_side(
       &lhs_tokens,
       &diffs,

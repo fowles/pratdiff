@@ -1,9 +1,9 @@
+mod files;
+mod printer;
+
 use clap::Parser;
 use std::error::Error;
 use std::path::PathBuf;
-
-mod files;
-mod printer;
 
 #[derive(Parser, Debug)]
 #[command(version)]
