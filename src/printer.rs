@@ -157,7 +157,7 @@ impl Printer {
       self.styles.old_dim,
     );
     self.print_mutation_side(
-      &lhs_tokens,
+      &rhs_tokens,
       &diffs,
       "+",
       Side::Rhs,
