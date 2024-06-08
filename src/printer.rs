@@ -1,9 +1,9 @@
 #![allow(unused)] // TODO(kfm): remove this
 
 use owo_colors::{OwoColorize, Style, Styled};
-use pratdiff::DiffItem;
 use pratdiff::DiffItem::*;
 use pratdiff::Hunk;
+use pratdiff::{DiffItem, Side};
 use regex::Regex;
 use std::fmt::Display;
 use std::io::Write;
@@ -116,36 +116,24 @@ impl Printer {
       match &d {
         Mutation { lhs, rhs } => {
           if (rhs.is_empty()) {
-            self.print_deletion(&lhs_lines[lhs.clone()]);
+            self.print_lines(&lhs_lines[lhs.clone()], "-", self.styles.old);
           } else if (lhs.is_empty()) {
-            self.print_insertion(&rhs_lines[rhs.clone()]);
+            self.print_lines(&rhs_lines[rhs.clone()], "+", self.styles.new);
           } else {
             self
               .print_mutation(&lhs_lines[lhs.clone()], &rhs_lines[rhs.clone()]);
           }
         }
         Match { lhs, .. } => {
-          self.print_match(&lhs_lines[lhs.clone()]);
+          self.print_lines(&lhs_lines[lhs.clone()], " ", self.styles.both);
         }
       }
     }
   }
 
-  fn print_match(&mut self, lines: &[&str]) {
+  fn print_lines(&mut self, lines: &[&str], prefix: &str, style: Style) {
     for line in lines {
-      writeln!(self.writer, " {}", line.style(self.styles.both));
-    }
-  }
-
-  fn print_deletion(&mut self, lines: &[&str]) {
-    for line in lines {
-      writeln!(self.writer, "{}", format!("-{}", line).style(self.styles.old));
-    }
-  }
-
-  fn print_insertion(&mut self, lines: &[&str]) {
-    for line in lines {
-      writeln!(self.writer, "{}", format!("+{}", line).style(self.styles.new));
+      writeln!(self.writer, "{}{}", prefix.style(style), line.style(style));
     }
   }
 
@@ -160,48 +148,40 @@ impl Printer {
     rhs_tokens.pop();
 
     let diffs = pratdiff::diff(&lhs_tokens, &rhs_tokens);
+    self.print_mutation_side(
+      &lhs_tokens,
+      &diffs,
+      "-",
+      Side::Lhs,
+      self.styles.old,
+      self.styles.old_dim,
+    );
+    self.print_mutation_side(
+      &lhs_tokens,
+      &diffs,
+      "+",
+      Side::Rhs,
+      self.styles.new,
+      self.styles.new_dim,
+    );
+  }
 
-    write!(self.writer, "{}", "-".style(self.styles.old));
-    for d in &diffs {
-      match &d {
-        Match { lhs, .. } => {
-          for &t in &lhs_tokens[lhs.clone()] {
-            write!(self.writer, "{}", t.style(self.styles.old_dim));
-            if t == "\n" {
-              write!(self.writer, "{}", "-".style(self.styles.old));
-            }
-          }
-        }
-        Mutation { lhs, .. } => {
-          for &t in &lhs_tokens[lhs.clone()] {
-            write!(self.writer, "{}", t.style(self.styles.old));
-            if t == "\n" {
-              write!(self.writer, "{}", "-".style(self.styles.old));
-            }
-          }
-        }
-      }
-    }
-    writeln!(self.writer);
-
-    write!(self.writer, "{}", "+".style(self.styles.new));
-    for d in &diffs {
-      match &d {
-        Match { rhs, .. } => {
-          for &t in &rhs_tokens[rhs.clone()] {
-            write!(self.writer, "{}", t.style(self.styles.new_dim));
-            if t == "\n" {
-              write!(self.writer, "{}", "+".style(self.styles.new));
-            }
-          }
-        }
-        Mutation { rhs, .. } => {
-          for &t in &rhs_tokens[rhs.clone()] {
-            write!(self.writer, "{}", t.style(self.styles.new));
-            if t == "\n" {
-              write!(self.writer, "{}", "+".style(self.styles.new));
-            }
-          }
+  fn print_mutation_side(
+    &mut self,
+    tokens: &[&str],
+    diffs: &[DiffItem],
+    prefix: &str,
+    side: Side,
+    mutation: Style,
+    matching: Style,
+  ) {
+    write!(self.writer, "{}", prefix.style(mutation));
+    for d in diffs {
+      let style = if matches!(d, Match { .. }) { matching } else { mutation };
+      for &t in &tokens[d.side(side)] {
+        write!(self.writer, "{}", t.style(style));
+        if t == "\n" {
+          write!(self.writer, "{}", prefix.style(mutation));
         }
       }
     }
