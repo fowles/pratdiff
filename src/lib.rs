@@ -171,6 +171,27 @@ pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
   d.vec
 }
 
+pub fn tokenize_lines<'a>(lines: &[&'a str]) -> Vec<&'a str> {
+  let re = regex::Regex::new(r"\w+|\s+").unwrap();
+  let mut v = Vec::new();
+  for &line in lines {
+    let mut last_pos = 0;
+    for m in re.find_iter(line) {
+      if m.start() > last_pos {
+        v.push(&line[last_pos..m.start()]);
+      }
+      last_pos = m.end();
+      v.push(m.as_str());
+    }
+    if last_pos < line.len() {
+      v.push(&line[last_pos..]);
+    }
+    v.push("\n");
+  }
+  v.pop();
+  v
+}
+
 // Patience diff algorithm
 //
 // 1. Match the first lines of both if they're identical, then match the second,
@@ -494,6 +515,14 @@ mod tests {
     assert_eq!(
       hunk_positions(&Hunk::build(0, &diff)),
       &[((1, 8), (1, 0)), ((17, 0), (9, 8))]
+    );
+  }
+
+  #[test]
+  fn tokenize() {
+    assert_eq!(
+      tokenize_lines(&["void func1() {", "  x += 1"]),
+      &["void", " ", "func1", "()", " ", "{", "\n", "  ", "x", " ", "+=", " ", "1"],
     );
   }
 }

@@ -4,7 +4,6 @@ use owo_colors::{OwoColorize, Style, Styled};
 use pratdiff::DiffItem::*;
 use pratdiff::Hunk;
 use pratdiff::{DiffItem, Side};
-use regex::Regex;
 use std::fmt::Display;
 use std::io::Write;
 
@@ -138,15 +137,8 @@ impl Printer {
   }
 
   fn print_mutation(&mut self, lhs_lines: &[&str], rhs_lines: &[&str]) {
-    let re = Regex::new(r"\b").unwrap();
-    let tokenize = |&line| re.split(line).chain(std::iter::once("\n"));
-
-    let mut lhs_tokens: Vec<_> = lhs_lines.iter().flat_map(tokenize).collect();
-    lhs_tokens.pop();
-
-    let mut rhs_tokens: Vec<_> = rhs_lines.iter().flat_map(tokenize).collect();
-    rhs_tokens.pop();
-
+    let mut lhs_tokens = pratdiff::tokenize_lines(&lhs_lines);
+    let mut rhs_tokens = pratdiff::tokenize_lines(&rhs_lines);
     let diffs = pratdiff::diff(&lhs_tokens, &rhs_tokens);
     self.print_mutation_side(
       &lhs_tokens,

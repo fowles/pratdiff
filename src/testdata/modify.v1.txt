@@ -1,5 +1,4 @@
-void func_better() {
-  y += 1
+void func_better() { y += 1
 }
 
 void func_worse() {
