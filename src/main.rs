@@ -2,6 +2,7 @@ mod files;
 mod printer;
 
 use clap::{ColorChoice, Parser};
+use common_path::common_path;
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -21,7 +22,10 @@ struct Args {
   #[clap(short, long, value_name = "NUM", default_value_t = 3)]
   context: usize,
 
-  /// Color
+  /// Print full paths instead of stripping a common prefix
+  #[clap(short, long)]
+  verbose_paths: bool,
+
   #[clap(long, default_value_t = ColorChoice::Auto)]
   color: ColorChoice,
 }
@@ -35,7 +39,16 @@ fn main() -> Result<(), Box<dyn Error>> {
   }
   .write_global();
 
-  let mut p =
-    printer::Printer::default(Box::new(anstream::stdout()), args.context);
+  let common_prefix = if args.verbose_paths {
+    PathBuf::new()
+  } else {
+    common_path(&args.lhs, &args.rhs).unwrap_or_default()
+  };
+
+  let mut p = printer::Printer::default(
+    Box::new(anstream::stdout()),
+    args.context,
+    common_prefix,
+  );
   files::diff(&mut p, &args.lhs, &args.rhs)
 }

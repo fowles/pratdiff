@@ -3,7 +3,7 @@ use pratdiff::DiffItem::*;
 use pratdiff::{diff, tokenize_lines, DiffItem, Hunk, Side};
 use std::io::Result;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 struct Styles {
   header: Style,
@@ -33,21 +33,32 @@ pub struct Printer {
   styles: Styles,
   writer: Box<dyn Write>,
   context: usize,
-}
-
-macro_rules! display {
-  ($x:expr) => {
-    $x.unwrap_or(Path::new("/dev/null")).display()
-  };
+  common_prefix: PathBuf,
 }
 
 impl Printer {
-  pub fn default(writer: Box<dyn Write>, context: usize) -> Printer {
+  pub fn default(
+    writer: Box<dyn Write>,
+    context: usize,
+    common_prefix: PathBuf,
+  ) -> Printer {
     Printer {
       styles: Styles::default(),
       writer,
       context,
+      common_prefix,
     }
+  }
+
+  fn display_name(&self, p: &Option<&Path>) -> String {
+    let Some(p) = p else {
+      return "/dev/null".into();
+    };
+
+    p.strip_prefix(&self.common_prefix)
+      .unwrap_or(p)
+      .display()
+      .to_string()
   }
 
   pub fn print_directory_mismatch(
@@ -65,9 +76,9 @@ impl Printer {
     writeln!(
       self.writer,
       "File/directory mistmatch:\n  {} is a {}\n  {} is a {}",
-      lhs.display().style(self.styles.old),
+      self.display_name(&Some(lhs)).style(self.styles.old),
       ft(lhs),
-      rhs.display().style(self.styles.new),
+      self.display_name(&Some(rhs)).style(self.styles.new),
       ft(rhs),
     )
   }
@@ -80,8 +91,8 @@ impl Printer {
     writeln!(
       self.writer,
       "Binary files {} and {} differ",
-      display!(lhs).style(self.styles.old),
-      display!(rhs).style(self.styles.new),
+      self.display_name(lhs).style(self.styles.old),
+      self.display_name(rhs).style(self.styles.new),
     )?;
     Ok(())
   }
@@ -95,13 +106,13 @@ impl Printer {
       self.writer,
       "{} {}",
       "---".style(self.styles.old),
-      display!(lhs).style(self.styles.header),
+      self.display_name(lhs).style(self.styles.header),
     )?;
     writeln!(
       self.writer,
       "{} {}",
       "+++".style(self.styles.new),
-      display!(rhs).style(self.styles.header)
+      self.display_name(rhs).style(self.styles.header)
     )?;
     Ok(())
   }
