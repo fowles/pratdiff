@@ -26,5 +26,5 @@ fn main() -> Result<(), Box<dyn Error>> {
   let args = Args::parse();
   let mut p =
     printer::Printer::default(Box::new(anstream::stdout()), args.context);
-  files::diff_files(&mut p, &args.lhs, &args.rhs)
+  files::diff(&mut p, &args.lhs, &args.rhs)
 }

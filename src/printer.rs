@@ -1,9 +1,9 @@
 use owo_colors::{OwoColorize, Style};
-use pratdiff::{Hunk, DiffItem, Side, diff, tokenize_lines};
 use pratdiff::DiffItem::*;
-use std::fmt::Display;
+use pratdiff::{diff, tokenize_lines, DiffItem, Hunk, Side};
 use std::io::Result;
 use std::io::Write;
+use std::path::Path;
 
 struct Styles {
   header: Style,
@@ -35,6 +35,12 @@ pub struct Printer {
   context: usize,
 }
 
+macro_rules! display {
+  ($x:expr) => {
+    $x.unwrap_or(Path::new("/dev/null")).display()
+  };
+}
+
 impl Printer {
   pub fn default(writer: Box<dyn Write>, context: usize) -> Printer {
     Printer {
@@ -44,36 +50,56 @@ impl Printer {
     }
   }
 
+  pub fn print_directory_mismatch(&mut self, lhs: &Path, rhs: &Path) -> ! {
+    fn ft(p: &Path) -> &str {
+      if p.metadata().unwrap().is_dir() {
+        "directory"
+      } else {
+        "file"
+      }
+    }
+    writeln!(
+      self.writer,
+      "File/directory mistmatch:\n  {} is a {}\n  {} is a {}",
+      lhs.display().style(self.styles.old),
+      ft(lhs),
+      rhs.display().style(self.styles.new),
+      ft(rhs),
+    )
+    .unwrap();
+    panic!();
+  }
+
   pub fn print_binary_files_differ(
     &mut self,
-    lhs: &dyn Display,
-    rhs: &dyn Display,
+    lhs: &Option<&Path>,
+    rhs: &Option<&Path>,
   ) -> Result<()> {
     writeln!(
       self.writer,
       "Binary files {} and {} differ",
-      lhs.style(self.styles.old),
-      rhs.style(self.styles.new),
+      display!(lhs).style(self.styles.old),
+      display!(rhs).style(self.styles.new),
     )?;
     Ok(())
   }
 
   pub fn print_file_header(
     &mut self,
-    lhs: &dyn Display,
-    rhs: &dyn Display,
+    lhs: &Option<&Path>,
+    rhs: &Option<&Path>,
   ) -> Result<()> {
     writeln!(
       self.writer,
       "{} {}",
       "---".style(self.styles.old),
-      lhs.style(self.styles.header),
+      display!(lhs).style(self.styles.header),
     )?;
     writeln!(
       self.writer,
       "{} {}",
       "+++".style(self.styles.new),
-      rhs.style(self.styles.header)
+      display!(rhs).style(self.styles.header)
     )?;
     Ok(())
   }
@@ -121,8 +147,10 @@ impl Printer {
           } else if lhs.is_empty() {
             self.print_lines(&rhs_lines[rhs.clone()], "+", self.styles.new)?;
           } else {
-            self
-              .print_mutation(&lhs_lines[lhs.clone()], &rhs_lines[rhs.clone()])?;
+            self.print_mutation(
+              &lhs_lines[lhs.clone()],
+              &rhs_lines[rhs.clone()],
+            )?;
           }
         }
         Match { lhs, .. } => {
