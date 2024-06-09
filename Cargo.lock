@@ -184,6 +184,7 @@ name = "pratdiff"
 version = "0.1.0"
 dependencies = [
  "anstream",
+ "cfg-if",
  "clap",
  "clap_complete",
  "owo-colors",

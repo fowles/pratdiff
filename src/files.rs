@@ -49,6 +49,15 @@ fn diff_entries(
       }
     }
     (Some(lhs), Some(rhs)) => {
+      cfg_if::cfg_if! {
+        if #[cfg(unix)] {
+          use walkdir::DirEntryExt;
+          if lhs.ino() == rhs.ino() {
+            return Ok(())
+          }
+        }
+      }
+
       if lhs.metadata()?.is_dir() && rhs.metadata()?.is_dir() {
         Ok(())
       } else if lhs.metadata()?.is_dir() || rhs.metadata()?.is_dir() {
