@@ -1,7 +1,15 @@
 [package]
 name = "pratdiff"
+description = "A colorfull diff tool based on the patience diff algorithm"
+repository = "https://github.com/fowles/pratdiff"
 version = "0.1.0"
 edition = "2021"
+license-file = "LICENSE.md"
+keywords = ["diff", "patience"]
+categories = ["command-line-utilities", "development-tools", "filesystem"]
+exclude = [
+    "src/testdata",
+]
 
 [dependencies]
 anstream = "0.6.14"
