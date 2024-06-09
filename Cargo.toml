@@ -4,6 +4,7 @@ description = "A colorfull diff tool based on the patience diff algorithm"
 repository = "https://github.com/fowles/pratdiff"
 version = "0.1.0"
 edition = "2021"
+license = "Apache-2.0"
 license-file = "LICENSE.md"
 keywords = ["diff", "patience"]
 categories = ["command-line-utilities", "development-tools", "filesystem"]
