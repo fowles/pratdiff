@@ -15,7 +15,7 @@ pub fn diff(
   match (lhs.metadata()?.is_dir(), rhs.metadata()?.is_dir()) {
     (false, false) => diff_file_candidates(p, &Some(lhs), &Some(rhs)),
     (true, true) => diff_directories(p, lhs, rhs),
-    _ => p.print_directory_mismatch(lhs, rhs),
+    _ => Ok(p.print_directory_mismatch(lhs, rhs)?),
   }
 }
 
@@ -52,7 +52,7 @@ fn diff_entries(
       if lhs.metadata()?.is_dir() && rhs.metadata()?.is_dir() {
         Ok(())
       } else if lhs.metadata()?.is_dir() || rhs.metadata()?.is_dir() {
-        p.print_directory_mismatch(lhs.path(), rhs.path());
+        Ok(p.print_directory_mismatch(lhs.path(), rhs.path())?)
       } else {
         diff_file_candidates(p, &Some(lhs.path()), &Some(rhs.path()))
       }

@@ -50,7 +50,11 @@ impl Printer {
     }
   }
 
-  pub fn print_directory_mismatch(&mut self, lhs: &Path, rhs: &Path) -> ! {
+  pub fn print_directory_mismatch(
+    &mut self,
+    lhs: &Path,
+    rhs: &Path,
+  ) -> Result<()> {
     fn ft(p: &Path) -> &str {
       if p.metadata().unwrap().is_dir() {
         "directory"
@@ -66,8 +70,6 @@ impl Printer {
       rhs.display().style(self.styles.new),
       ft(rhs),
     )
-    .unwrap();
-    panic!();
   }
 
   pub fn print_binary_files_differ(
