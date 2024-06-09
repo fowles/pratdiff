@@ -13,7 +13,7 @@ pub fn diff(
   rhs: &Path,
 ) -> Result<(), Box<dyn Error>> {
   match (lhs.metadata()?.is_dir(), rhs.metadata()?.is_dir()) {
-    (false, false) => diff_file_candidates(p, &Some(lhs), &Some(rhs)),
+    (false, false) => diff_file_candidates(p, Some(lhs), Some(rhs)),
     (true, true) => diff_directories(p, lhs, rhs),
     _ => Ok(p.print_directory_mismatch(lhs, rhs)?),
   }
@@ -38,14 +38,14 @@ fn diff_entries(
       if lhs.metadata()?.is_dir() {
         Ok(())
       } else {
-        diff_file_candidates(p, &Some(lhs.path()), &None)
+        diff_file_candidates(p, Some(lhs.path()), None)
       }
     }
     (None, Some(rhs)) => {
       if rhs.metadata()?.is_dir() {
         Ok(())
       } else {
-        diff_file_candidates(p, &None, &Some(rhs.path()))
+        diff_file_candidates(p, None, Some(rhs.path()))
       }
     }
     (Some(lhs), Some(rhs)) => {
@@ -63,7 +63,7 @@ fn diff_entries(
       } else if lhs.metadata()?.is_dir() || rhs.metadata()?.is_dir() {
         Ok(p.print_directory_mismatch(lhs.path(), rhs.path())?)
       } else {
-        diff_file_candidates(p, &Some(lhs.path()), &Some(rhs.path()))
+        diff_file_candidates(p, Some(lhs.path()), Some(rhs.path()))
       }
     }
   }
@@ -71,8 +71,8 @@ fn diff_entries(
 
 fn diff_file_candidates(
   p: &mut Printer,
-  lhs_path: &Option<&Path>,
-  rhs_path: &Option<&Path>,
+  lhs_path: Option<&Path>,
+  rhs_path: Option<&Path>,
 ) -> Result<(), Box<dyn Error>> {
   let lhs_raw = read(lhs_path)?;
   let rhs_raw = read(rhs_path)?;
@@ -153,7 +153,7 @@ fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn Error>> {
   }
 }
 
-fn read(path: &Option<&Path>) -> Result<Vec<u8>, Box<dyn Error>> {
+fn read(path: Option<&Path>) -> Result<Vec<u8>, Box<dyn Error>> {
   let mut buffer = Vec::new();
   if let Some(path) = path {
     let mut file = open(path)?;

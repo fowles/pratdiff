@@ -50,7 +50,7 @@ impl Printer {
     }
   }
 
-  fn display_name(&self, p: &Option<&Path>) -> String {
+  fn display_name(&self, p: Option<&Path>) -> String {
     let Some(p) = p else {
       return "/dev/null".into();
     };
@@ -76,17 +76,17 @@ impl Printer {
     writeln!(
       self.writer,
       "File/directory mistmatch:\n  {} is a {}\n  {} is a {}",
-      self.display_name(&Some(lhs)).style(self.styles.old),
+      self.display_name(Some(lhs)).style(self.styles.old),
       ft(lhs),
-      self.display_name(&Some(rhs)).style(self.styles.new),
+      self.display_name(Some(rhs)).style(self.styles.new),
       ft(rhs),
     )
   }
 
   pub fn print_binary_files_differ(
     &mut self,
-    lhs: &Option<&Path>,
-    rhs: &Option<&Path>,
+    lhs: Option<&Path>,
+    rhs: Option<&Path>,
   ) -> Result<()> {
     writeln!(
       self.writer,
@@ -99,8 +99,8 @@ impl Printer {
 
   pub fn print_file_header(
     &mut self,
-    lhs: &Option<&Path>,
-    rhs: &Option<&Path>,
+    lhs: Option<&Path>,
+    rhs: Option<&Path>,
   ) -> Result<()> {
     writeln!(
       self.writer,
