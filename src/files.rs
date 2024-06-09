@@ -155,13 +155,11 @@ fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn Error>> {
 
 fn read(path: &Option<&Path>) -> Result<Vec<u8>, Box<dyn Error>> {
   let mut buffer = Vec::new();
+  if let Some(path) = path {
+    let mut file = open(path)?;
+    file.read_to_end(&mut buffer)?;
+  }
 
-  let Some(path) = path else {
-    return Ok(buffer);
-  };
-
-  let mut file = open(path)?;
-  file.read_to_end(&mut buffer)?;
   Ok(buffer)
 }
 

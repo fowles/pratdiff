@@ -1,7 +1,7 @@
 mod files;
 mod printer;
 
-use clap::{Parser, ColorChoice};
+use clap::{ColorChoice, Parser};
 use std::error::Error;
 use std::path::PathBuf;
 
@@ -32,7 +32,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     ColorChoice::Auto => anstream::ColorChoice::Auto,
     ColorChoice::Always => anstream::ColorChoice::Always,
     ColorChoice::Never => anstream::ColorChoice::Never,
-  }.write_global();
+  }
+  .write_global();
 
   let mut p =
     printer::Printer::default(Box::new(anstream::stdout()), args.context);
