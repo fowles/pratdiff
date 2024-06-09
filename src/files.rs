@@ -159,7 +159,6 @@ fn read(path: &Option<&Path>) -> Result<Vec<u8>, Box<dyn Error>> {
     let mut file = open(path)?;
     file.read_to_end(&mut buffer)?;
   }
-
   Ok(buffer)
 }
 
