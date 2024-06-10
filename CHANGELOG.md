@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2024-06-09
+
+### Added
+
+- Added shell completions via `--completions`
+
 ## [0.1.1] - 2024-06-09
 
 Documentation fixes only
@@ -31,5 +37,6 @@ Initial release.
 
 
 [Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.0...main 
+[0.1.2]: https://github.com/fowles/pratdiff/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/fowles/pratdiff/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/fowles/pratdiff/compare/33062819364ff9bf89dc1566e05e0b3e448ec094...0.1.0
