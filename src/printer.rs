@@ -131,15 +131,16 @@ impl Printer {
   }
 
   fn print_hunk_header(&mut self, h: &Hunk) -> Result<()> {
+    let (l, r) = (h.lhs(), h.rhs());
     writeln!(
       self.writer,
       "{}",
       format!(
         "@@ -{},{} +{},{}  @@",
-        h.lhs_pos() + 1,
-        h.lhs_len(),
-        h.rhs_pos() + 1,
-        h.rhs_len()
+        l.start + 1,
+        l.len(),
+        r.start + 1,
+        r.len()
       )
       .style(self.styles.separator)
     )?;

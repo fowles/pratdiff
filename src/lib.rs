@@ -85,20 +85,19 @@ impl Hunk {
       .collect()
   }
 
-  pub fn lhs_pos(&self) -> usize {
-    self.diffs.first().map_or(0, |d| d.lhs().start)
+  pub fn side(&self, side: Side) -> Range<usize> {
+    Range {
+      start: self.diffs.first().map_or(0, |d| d.side(side).start),
+      end: self.diffs.last().map_or(0, |d| d.side(side).end),
+    }
   }
 
-  pub fn lhs_len(&self) -> usize {
-    self.diffs.iter().map(|d| d.lhs().len()).sum()
+  pub fn lhs(&self) -> Range<usize> {
+    self.side(Side::Lhs)
   }
 
-  pub fn rhs_pos(&self) -> usize {
-    self.diffs.first().map_or(0, |d| d.rhs().start)
-  }
-
-  pub fn rhs_len(&self) -> usize {
-    self.diffs.iter().map(|d| d.rhs().len()).sum()
+  pub fn rhs(&self) -> Range<usize> {
+    self.side(Side::Rhs)
   }
 }
 
@@ -157,12 +156,6 @@ impl Diffs {
   fn rhs_pos(&self) -> usize {
     self.vec.last().map_or(0, |d| d.rhs().end)
   }
-}
-
-pub fn diff_lines(lhs: &str, rhs: &str) -> Vec<DiffItem> {
-  let lhs_lines: Vec<_> = lhs.lines().collect();
-  let rhs_lines: Vec<_> = rhs.lines().collect();
-  diff(&lhs_lines, &rhs_lines)
 }
 
 pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
@@ -310,6 +303,12 @@ fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  fn diff_lines(lhs: &str, rhs: &str) -> Vec<DiffItem> {
+    let lhs_lines: Vec<_> = lhs.lines().collect();
+    let rhs_lines: Vec<_> = rhs.lines().collect();
+    diff(&lhs_lines, &rhs_lines)
+  }
 
   #[test]
   fn diff_empty() {
@@ -498,7 +497,10 @@ mod tests {
   fn hunk_positions(hunks: &[Hunk]) -> Vec<((usize, usize), (usize, usize))> {
     hunks
       .iter()
-      .map(|h| ((h.lhs_pos() + 1, h.lhs_len()), (h.rhs_pos() + 1, h.rhs_len())))
+      .map(|h| {
+        let (l, r) = (h.lhs(), h.rhs());
+        ((l.start + 1, l.len()), (r.start + 1, r.len()))
+      })
       .collect::<Vec<_>>()
   }
 
