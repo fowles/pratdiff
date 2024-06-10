@@ -16,7 +16,7 @@ and
 The `--completions` flag takes a shell and outputs a completion script.
 
 ```bash
-eval "$(pratdiff --completions=fish)"
+eval "$(pratdiff --completions=bash)"
 ```
 
 ```fish
