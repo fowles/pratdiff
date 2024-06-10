@@ -2,7 +2,7 @@
 name = "pratdiff"
 description = "A colorfull diff tool based on the patience diff algorithm"
 repository = "https://github.com/fowles/pratdiff"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "Apache-2.0"
 keywords = ["diff", "patience"]
