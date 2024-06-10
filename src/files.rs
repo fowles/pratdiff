@@ -58,12 +58,12 @@ fn diff_entries(
         }
       }
 
-      if lhs.metadata()?.is_dir() && rhs.metadata()?.is_dir() {
-        Ok(())
-      } else if lhs.metadata()?.is_dir() || rhs.metadata()?.is_dir() {
-        Ok(p.print_directory_mismatch(lhs.path(), rhs.path())?)
-      } else {
-        diff_file_candidates(p, Some(lhs.path()), Some(rhs.path()))
+      match (lhs.metadata()?.is_dir(), rhs.metadata()?.is_dir()) {
+        (false, false) => {
+          diff_file_candidates(p, Some(lhs.path()), Some(rhs.path()))
+        }
+        (true, true) => Ok(()),
+        _ => Ok(p.print_directory_mismatch(lhs.path(), rhs.path())?),
       }
     }
   }
