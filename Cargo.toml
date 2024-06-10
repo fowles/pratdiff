@@ -9,6 +9,7 @@ keywords = ["diff", "patience"]
 categories = ["command-line-utilities", "development-tools", "filesystem"]
 exclude = [
     "src/testdata",
+    "docs",
 ]
 
 [dependencies]
