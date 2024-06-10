@@ -43,3 +43,7 @@ out of date insult.
 The way that token level diffing uses the same algorithm as the line level
 diffing is pretty cool in my mind.  I didn't think going into it that I would
 structure it that way and it all kinda just fell out.
+
+Also, I learned that the tiny extension on patience diff I made to use
+non-unique lines if unique ones fail is a known algorithm called "histogram
+diff".

@@ -222,10 +222,7 @@ fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
 }
 
 fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
-  let matched = (1..5) // 5 selected arbitrarily
-    .filter_map(|i| match_lines(i, lhs, rhs))
-    .next()
-    .unwrap_or_default();
+  let matched = match_lines(lhs, rhs);
   if matched.is_empty() {
     diffs.add_mutation(lhs.len(), rhs.len());
     return;
@@ -243,11 +240,7 @@ fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
   accumulate_diffs(diffs, &lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()]);
 }
 
-fn match_lines(
-  arity: usize,
-  lhs: &[&str],
-  rhs: &[&str],
-) -> Option<Vec<(usize, usize)>> {
+fn match_lines(lhs: &[&str], rhs: &[&str]) -> Vec<(usize, usize)> {
   let mut m: HashMap<&str, (Vec<usize>, Vec<usize>)> = HashMap::new();
   for (i, l) in lhs.iter().enumerate() {
     m.entry(l).or_default().0.push(i);
@@ -256,17 +249,23 @@ fn match_lines(
     m.entry(r).or_default().1.push(i);
   }
 
+  let mut min = usize::MAX;
+  m.retain(|_, (l, r)| {
+    if l.len() == r.len() {
+      min = min.min(l.len());
+      true
+    } else {
+      false
+    }
+  });
+
   let mut v: Vec<(usize, usize)> = m
     .into_values()
-    .filter(|(l, r)| l.len() == arity && r.len() == arity)
+    .filter(|(l, _)| l.len() == min)
     .flat_map(|(l, r)| zip(l, r))
     .collect();
   v.sort();
-  if v.is_empty() {
-    None
-  } else {
-    Some(v)
-  }
+  v
 }
 
 fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
@@ -413,16 +412,16 @@ mod tests {
   #[test]
   fn match_lines_arity1() {
     assert_eq!(
-      match_lines(1, &["a", "b", "c", "d", "e", "d"], &["a", "c", "d", "e"]),
-      Some(vec![(0, 0), (2, 1), (4, 3)]),
+      match_lines(&["a", "b", "c", "d", "e", "d"], &["a", "c", "d", "e"]),
+      vec![(0, 0), (2, 1), (4, 3)],
     );
   }
 
   #[test]
   fn match_lines_arity2() {
     assert_eq!(
-      match_lines(2, &["a", "b", "b", "c"], &["b", "b"]),
-      Some(vec![(1, 0), (2, 1)]),
+      match_lines(&["a", "b", "b", "c"], &["b", "b"]),
+      vec![(1, 0), (2, 1)],
     );
   }
 
