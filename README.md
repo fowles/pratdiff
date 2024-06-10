@@ -11,7 +11,19 @@ and
 
 # FAQ
 
-## Why?
+## How do I enable autocompletions?
+
+The `--completions` flag takes a shell and outputs a completion script.
+
+```bash
+eval "$(pratdiff --completions=fish)"
+```
+
+```fish
+pratdiff --completions=fish | source
+```
+
+## Why did you bother doing this?
 
 Cause I wanted a learning project and this seemed like a reasonable one.
 
