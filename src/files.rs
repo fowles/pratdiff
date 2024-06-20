@@ -24,7 +24,16 @@ fn diff_directories(
   lhs: &Path,
   rhs: &Path,
 ) -> Result<(), Box<dyn Error>> {
-  walk_dirs(lhs, rhs, |l, r| diff_entries(p, l, r))
+  walk_dirs(lhs, rhs, |l, r| {
+    if let Err(e) = diff_entries(p, l, r) {
+      p.print_error(
+        l.as_ref().map(|l| l.path()),
+        r.as_ref().map(|r| r.path()),
+        e,
+      )?;
+    }
+    Ok(())
+  })
 }
 
 fn diff_entries(

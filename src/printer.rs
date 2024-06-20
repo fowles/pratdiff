@@ -1,6 +1,7 @@
 use owo_colors::{OwoColorize, Style};
 use pratdiff::DiffItem::*;
 use pratdiff::{diff, tokenize_lines, DiffItem, Hunk, Side};
+use std::error::Error;
 use std::io::Result;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -54,11 +55,28 @@ impl Printer {
     let Some(p) = p else {
       return "/dev/null".into();
     };
+    let stripped = p.strip_prefix(&self.common_prefix).unwrap_or(p);
+    if let Ok(link) = std::fs::read_link(p) {
+      let stripped_link =
+        link.strip_prefix(&self.common_prefix).unwrap_or(&link);
+      return format!("{} -> {}", stripped.display(), stripped_link.display());
+    }
+    stripped.display().to_string()
+  }
 
-    p.strip_prefix(&self.common_prefix)
-      .unwrap_or(p)
-      .display()
-      .to_string()
+  pub fn print_error(
+    &mut self,
+    lhs: Option<&Path>,
+    rhs: Option<&Path>,
+    err: Box<dyn Error>,
+  ) -> Result<()> {
+    writeln!(
+      self.writer,
+      "Error diffing {} and {}:\n{}",
+      self.display_name(lhs).style(self.styles.old),
+      self.display_name(rhs).style(self.styles.new),
+      err
+    )
   }
 
   pub fn print_directory_mismatch(
