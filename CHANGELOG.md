@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2024-06-24
+
+### Changed
+
+- Make directory walk report errors without halting the entire walk
+- Include symlink info in file names
+
 ## [0.1.4] - 2024-06-19
 
 ### Changed
@@ -44,7 +51,8 @@ Initial release.
 
 
 [Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.4...main 
-[0.1.4]: https://github.com/fowles/pratdiff/compare/0.1.1...0.1.4
+[0.1.5]: https://github.com/fowles/pratdiff/compare/0.1.4...0.1.5
+[0.1.4]: https://github.com/fowles/pratdiff/compare/0.1.2...0.1.4
 [0.1.2]: https://github.com/fowles/pratdiff/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/fowles/pratdiff/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/fowles/pratdiff/compare/33062819364ff9bf89dc1566e05e0b3e448ec094...0.1.0
