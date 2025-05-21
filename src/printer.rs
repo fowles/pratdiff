@@ -1,8 +1,8 @@
+use crate::style::Styles;
+use crate::DiffItem::*;
+use crate::{diff, tokenize_lines, DiffItem, Hunk, Side};
 use owo_colors::OwoColorize;
 use owo_colors::Style;
-use crate::style::Styles;
-use pratdiff::DiffItem::*;
-use pratdiff::{diff, tokenize_lines, DiffItem, Hunk, Side};
 use std::error::Error;
 use std::io::Result;
 use std::io::Write;

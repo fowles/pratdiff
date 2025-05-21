@@ -1,7 +1,3 @@
-mod files;
-mod printer;
-mod style;
-
 use clap::{ColorChoice, CommandFactory, Parser};
 use clap_complete_command::Shell;
 use common_path::common_path;
@@ -58,10 +54,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     common_path(&lhs, &rhs).unwrap_or_default()
   };
 
-  let mut p = printer::Printer::default(
+  let mut p = pratdiff::Printer::default(
     Box::new(anstream::stdout()),
     args.context,
     common_prefix,
   );
-  files::diff(&mut p, &lhs, &rhs)
+  pratdiff::diff_files(&mut p, &lhs, &rhs)
 }
