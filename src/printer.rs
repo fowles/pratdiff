@@ -1,6 +1,9 @@
 use crate::style::Styles;
-use crate::DiffItem::*;
-use crate::{diff, tokenize_lines, DiffItem, Hunk, Side};
+use diff::DiffItem::*;
+use diff::DiffItem;
+use diff::Hunk;
+use diff::Side;
+use crate::{diff, tokenize_lines};
 use owo_colors::OwoColorize;
 use owo_colors::Style;
 use std::error::Error;
