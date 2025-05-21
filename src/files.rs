@@ -7,7 +7,7 @@ use walkdir::{DirEntry, WalkDir};
 
 use crate::printer::Printer;
 
-pub fn diff(
+pub fn diff_files(
   p: &mut Printer,
   lhs: &Path,
   rhs: &Path,

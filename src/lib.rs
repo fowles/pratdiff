@@ -2,6 +2,13 @@ use std::collections::HashMap;
 use std::iter::zip;
 use std::ops::Range;
 
+mod files;
+mod printer;
+mod style;
+
+pub use files::diff_files;
+pub use printer::Printer;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Side {
   Lhs,
