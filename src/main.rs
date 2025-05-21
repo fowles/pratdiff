@@ -1,5 +1,6 @@
 mod files;
 mod printer;
+mod style;
 
 use clap::{ColorChoice, CommandFactory, Parser};
 use clap_complete_command::Shell;

@@ -1,34 +1,12 @@
-use owo_colors::{OwoColorize, Style};
+use owo_colors::OwoColorize;
+use owo_colors::Style;
+use crate::style::Styles;
 use pratdiff::DiffItem::*;
 use pratdiff::{diff, tokenize_lines, DiffItem, Hunk, Side};
 use std::error::Error;
 use std::io::Result;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-
-struct Styles {
-  header: Style,
-  separator: Style,
-  both: Style,
-  old: Style,
-  old_dim: Style,
-  new: Style,
-  new_dim: Style,
-}
-
-impl Styles {
-  fn default() -> Styles {
-    Styles {
-      header: Style::new().bold().white(),
-      separator: Style::new().cyan(),
-      both: Style::new().default_color(),
-      old: Style::new().red(),
-      new: Style::new().green(),
-      old_dim: Style::new().dimmed(),
-      new_dim: Style::new().default_color(),
-    }
-  }
-}
 
 pub struct Printer {
   styles: Styles,
@@ -44,7 +22,7 @@ impl Printer {
     common_prefix: PathBuf,
   ) -> Printer {
     Printer {
-      styles: Styles::default(),
+      styles: Styles::simple(),
       writer,
       context,
       common_prefix,
