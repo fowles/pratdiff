@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-05-21
+
+### Changed
+
+- Move around code to make pratdiff easier to use as a library
+- Update dependency versions
+
 ## [0.1.5] - 2024-06-24
 
 ### Changed
