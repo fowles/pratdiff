@@ -54,10 +54,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     common_path(&lhs, &rhs).unwrap_or_default()
   };
 
-  let mut p = pratdiff::Printer::default(
-    Box::new(anstream::stdout()),
-    args.context,
-    common_prefix,
-  );
+  let mut stdout = anstream::stdout();
+  let mut p =
+    pratdiff::Printer::default(&mut stdout, args.context, common_prefix);
   pratdiff::diff_files(&mut p, &lhs, &rhs)
 }
