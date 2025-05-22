@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2025-05-21
+
+### Changed
+
+- Update clap versions
+- Update dependency minimum versions
+
 ## [0.1.6] - 2025-05-21
 
 ### Changed
@@ -57,7 +64,8 @@ Initial release.
 - Directory walking
 
 
-[Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.6...main 
+[Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.7...main 
+[0.1.7]: https://github.com/fowles/pratdiff/compare/0.1.6...0.1.7 
 [0.1.6]: https://github.com/fowles/pratdiff/compare/0.1.5...0.1.6 
 [0.1.5]: https://github.com/fowles/pratdiff/compare/0.1.4...0.1.5
 [0.1.4]: https://github.com/fowles/pratdiff/compare/0.1.2...0.1.4
