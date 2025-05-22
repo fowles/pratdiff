@@ -9,6 +9,7 @@ mod style;
 use diff::Diffs;
 use diff::DiffItem;
 
+pub use style::Styles;
 pub use files::diff_files;
 pub use printer::Printer;
 

@@ -11,19 +11,19 @@ use std::io::Result;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-pub struct Printer {
-  styles: Styles,
-  writer: Box<dyn Write>,
+pub struct Printer<'a> {
+  pub styles: Styles,
+  writer: &'a mut dyn Write,
   context: usize,
   common_prefix: PathBuf,
 }
 
-impl Printer {
+impl<'a> Printer<'a> {
   pub fn default(
-    writer: Box<dyn Write>,
+    writer: &'a mut dyn Write,
     context: usize,
     common_prefix: PathBuf,
-  ) -> Printer {
+  ) -> Printer<'a> {
     Printer {
       styles: Styles::simple(),
       writer,
