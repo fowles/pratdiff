@@ -57,7 +57,8 @@ Initial release.
 - Directory walking
 
 
-[Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.4...main 
+[Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.6...main 
+[0.1.6]: https://github.com/fowles/pratdiff/compare/0.1.5...0.1.6 
 [0.1.5]: https://github.com/fowles/pratdiff/compare/0.1.4...0.1.5
 [0.1.4]: https://github.com/fowles/pratdiff/compare/0.1.2...0.1.4
 [0.1.2]: https://github.com/fowles/pratdiff/compare/0.1.1...0.1.2
