@@ -135,7 +135,7 @@ impl<'a> Printer<'a> {
       self.writer,
       "{}",
       format!(
-        "@@ -{},{} +{},{}  @@",
+        "@@ -{},{} +{},{} @@",
         l.start + 1,
         l.len(),
         r.start + 1,
