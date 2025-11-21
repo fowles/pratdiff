@@ -6,8 +6,8 @@ mod files;
 mod printer;
 mod style;
 
+pub use diff::DiffItem;
 use diff::Diffs;
-use diff::DiffItem;
 
 pub use style::Styles;
 pub use files::diff_files;
