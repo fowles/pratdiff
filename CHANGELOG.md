@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2025-11-21
+
+### Changed
+
+- Make `DiffItem` public in the library
+- Update dependency minimum versions
+
 ## [0.1.8] - 2025-09-03
 
 ### Changed
@@ -71,7 +78,8 @@ Initial release.
 - Directory walking
 
 
-[Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.8...main 
+[Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.9...main 
+[0.1.9]: https://github.com/fowles/pratdiff/compare/0.1.8...0.1.9 
 [0.1.8]: https://github.com/fowles/pratdiff/compare/0.1.7...0.1.8 
 [0.1.7]: https://github.com/fowles/pratdiff/compare/0.1.6...0.1.7 
 [0.1.6]: https://github.com/fowles/pratdiff/compare/0.1.5...0.1.6 
