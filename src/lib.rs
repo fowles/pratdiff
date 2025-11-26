@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 use std::iter::zip;
+use std::iter::Iterator;
 
 mod diff;
 mod files;
@@ -9,33 +11,88 @@ mod style;
 pub use diff::DiffItem;
 use diff::Diffs;
 
-pub use style::Styles;
 pub use files::diff_files;
 pub use printer::Printer;
+pub use style::Styles;
 
-pub fn diff(lhs: &[&str], rhs: &[&str]) -> Vec<DiffItem> {
+pub trait Diff {
+  type Line: Line + ?Sized;
+  fn lines(&self) -> impl Iterator<Item = &Self::Line>;
+}
+
+impl Diff for str {
+  type Line = str;
+  fn lines(&self) -> impl Iterator<Item = &Self::Line> {
+    self.lines()
+  }
+}
+
+pub trait Line: Hash + Eq {
+  fn tokenize(&self) -> impl Iterator<Item = &Self>;
+  fn delimiter<'a>() -> &'a Self;
+}
+
+impl Line for str {
+  fn tokenize(&self) -> impl Iterator<Item = &Self> {
+    SplitIter {
+      regex: regex::Regex::new(r"\w+|\s+").unwrap(),
+      content: self,
+      whitespace: "",
+    }
+  }
+  fn delimiter<'a>() -> &'a Self {
+    "\n"
+  }
+}
+
+pub struct SplitIter<'a> {
+  regex: regex::Regex,
+  content: &'a str,
+  whitespace: &'a str,
+}
+
+impl<'a> Iterator for SplitIter<'a> {
+  type Item = &'a str;
+
+  fn next(&mut self) -> Option<&'a str> {
+    let ws = self.whitespace;
+    self.whitespace = "";
+    if !ws.is_empty() {
+      return Some(ws);
+    }
+
+    if self.content.is_empty() {
+      return None;
+    }
+
+    let Some(m) = self.regex.find(self.content) else {
+      let s = self.content;
+      self.content = "";
+      return Some(s);
+    };
+
+    self.whitespace = m.as_str();
+    let s = &self.content[..m.start()];
+    self.content = &self.content[m.end()..];
+    if s.is_empty() {
+      self.next()
+    } else {
+      Some(s)
+    }
+  }
+}
+
+pub fn diff<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> Vec<DiffItem> {
   let mut d = Diffs::default();
   accumulate_partitions(&mut d, lhs, rhs);
   d.vec
 }
 
-pub fn tokenize_lines<'a>(lines: &[&'a str]) -> Vec<&'a str> {
-  let re = regex::Regex::new(r"\w+|\s+").unwrap();
-  let mut v = Vec::new();
-  for &line in lines {
-    let mut last_pos = 0;
-    for m in re.find_iter(line) {
-      if m.start() > last_pos {
-        v.push(&line[last_pos..m.start()]);
-      }
-      last_pos = m.end();
-      v.push(m.as_str());
-    }
-    if last_pos < line.len() {
-      v.push(&line[last_pos..]);
-    }
-    v.push("\n");
-  }
+pub fn tokenize_lines<'a, L: Line + ?Sized>(lines: &[&'a L]) -> Vec<&'a L> {
+  let mut v: Vec<_> = lines
+    .iter()
+    .flat_map(|l| l.tokenize().chain([L::delimiter()]))
+    .collect();
   v.pop();
   v
 }
@@ -49,7 +106,11 @@ pub fn tokenize_lines<'a>(lines: &[&'a str]) -> Vec<&'a str> {
 // 3. Find all lines which occur exactly once on both sides, then do longest
 //    common subsequence on those lines, matching them up.
 // 4. Do steps 1-2 on each section between matched lines.
-fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
+fn accumulate_diffs<L: Line + ?Sized>(
+  diffs: &mut Diffs,
+  lhs: &[&L],
+  rhs: &[&L],
+) {
   let leading = leading_match_len(lhs, rhs);
   diffs.add_match(leading);
   if leading == lhs.len() && leading == rhs.len() {
@@ -66,17 +127,21 @@ fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
   diffs.add_match(trailing);
 }
 
-fn leading_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
+fn leading_match_len<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> usize {
   zip(lhs, rhs).take_while(|(&l, &r)| l == r).count()
 }
 
-fn trailing_match_len(lhs: &[&str], rhs: &[&str]) -> usize {
+fn trailing_match_len<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> usize {
   zip(lhs.iter().rev(), rhs.iter().rev())
     .take_while(|(&l, &r)| l == r)
     .count()
 }
 
-fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
+fn accumulate_partitions<L: Line + ?Sized>(
+  diffs: &mut Diffs,
+  lhs: &[&L],
+  rhs: &[&L],
+) {
   let matched = match_lines(lhs, rhs);
   if matched.is_empty() {
     diffs.add_mutation(lhs.len(), rhs.len());
@@ -95,8 +160,11 @@ fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&str], rhs: &[&str]) {
   accumulate_diffs(diffs, &lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()]);
 }
 
-fn match_lines(lhs: &[&str], rhs: &[&str]) -> Vec<(usize, usize)> {
-  let mut m: HashMap<&str, (Vec<usize>, Vec<usize>)> = HashMap::new();
+fn match_lines<L: Line + ?Sized>(
+  lhs: &[&L],
+  rhs: &[&L],
+) -> Vec<(usize, usize)> {
+  let mut m: HashMap<&L, (Vec<usize>, Vec<usize>)> = HashMap::new();
   for (i, l) in lhs.iter().enumerate() {
     m.entry(l).or_default().0.push(i);
   }
@@ -157,10 +225,10 @@ fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use std::ops::Range;
   use diff::DiffItem;
   use diff::DiffItem::*;
   use diff::Hunk;
+  use std::ops::Range;
 
   fn diff_lines(lhs: &str, rhs: &str) -> Vec<DiffItem> {
     let lhs_lines: Vec<_> = lhs.lines().collect();
@@ -170,7 +238,7 @@ mod tests {
 
   #[test]
   fn diff_empty() {
-    assert_eq!(diff(&[], &[]), &[]);
+    assert_eq!(diff::<str>(&[], &[]), &[]);
   }
 
   #[test]
