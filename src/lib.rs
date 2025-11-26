@@ -65,8 +65,7 @@ impl<'a> Iterator for SplitIter<'a> {
     }
 
     let Some(m) = self.regex.find(self.content) else {
-      let s = self.content;
-      self.content = "";
+      let s = std::take(self.content);
       return Some(s);
     };
 
