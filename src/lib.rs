@@ -55,8 +55,7 @@ impl<'a> Iterator for SplitIter<'a> {
   type Item = &'a str;
 
   fn next(&mut self) -> Option<&'a str> {
-    let ws = self.whitespace;
-    self.whitespace = "";
+    let ws = std::take(self.whitespace);
     if !ws.is_empty() {
       return Some(ws);
     }
