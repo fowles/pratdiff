@@ -34,49 +34,59 @@ pub trait Line: Hash + Eq {
 
 impl Line for str {
   fn tokenize(&self) -> impl Iterator<Item = &Self> {
-    SplitIter {
-      regex: regex::Regex::new(r"\w+|\s+").unwrap(),
-      content: self,
-      whitespace: "",
-    }
+    StrTokenIter { content: self }
   }
+
   fn delimiter<'a>() -> &'a Self {
     "\n"
   }
 }
 
-pub struct SplitIter<'a> {
-  regex: regex::Regex,
+struct StrTokenIter<'a> {
   content: &'a str,
-  whitespace: &'a str,
 }
 
-impl<'a> Iterator for SplitIter<'a> {
+impl<'a> Iterator for StrTokenIter<'a> {
   type Item = &'a str;
 
   fn next(&mut self) -> Option<&'a str> {
-    let ws = std::mem::take(&mut self.whitespace);
-    if !ws.is_empty() {
-      return Some(ws);
-    }
-
     if self.content.is_empty() {
       return None;
     }
 
-    let Some(m) = self.regex.find(self.content) else {
-      let s = std::mem::take(&mut self.content);
-      return Some(s);
+    let pos = if self.content.starts_with(char::is_whitespace) {
+      self
+        .content
+        .find(|c: char| !c.is_whitespace())
+        .unwrap_or(self.content.len())
+    } else if self.content.starts_with(char::is_numeric) {
+      self
+        .content
+        .find(|c: char| !c.is_numeric())
+        .unwrap_or(self.content.len())
+    } else if self
+      .content
+      .starts_with(|c: char| c.is_alphabetic() || c == '_')
+    {
+      // Once we have verified that it starts with an alphabetic character,
+      // we also want to include numbers in the token.
+      self
+        .content
+        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .unwrap_or(self.content.len())
+    } else {
+      self
+        .content
+        .char_indices()
+        .skip(1)
+        .next()
+        .unwrap_or((self.content.len(), ' '))
+        .0
     };
 
-    self.whitespace = m.as_str();
-    let s = &self.content[..m.start()];
-    self.content = &self.content[m.end()..];
-    if s.is_empty() {
-      self.next()
-    } else {
-      Some(s)
-    }
+    let (token, remainder) = self.content.split_at(pos);
+    self.content = remainder;
+    Some(token)
   }
 }
 
@@ -449,7 +459,7 @@ mod tests {
     assert_eq!(
       tokenize_lines(&["void func1() {", "  x += 1"]),
       &[
-        "void", " ", "func1", "()", " ", "{", "\n", "  ", "x", " ", "+=", " ",
+        "void", " ", "func1", "(", ")", " ", "{", "\n", "  ", "x", " ", "+", "=", " ",
         "1"
       ],
     );
