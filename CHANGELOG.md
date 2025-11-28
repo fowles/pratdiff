@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2025-11-28
+
+### Changed
+
+- Refactor lib.rs to allow for non-utf8 things
+- update to edition 2024
+- improve tokenization of symbols
+
 ## [0.1.9] - 2025-11-21
 
 ### Changed
@@ -78,7 +86,8 @@ Initial release.
 - Directory walking
 
 
-[Unreleased]: https://github.com/fowles/pratdiff/compare/0.1.9...main 
+[Unreleased]: https://github.com/fowles/pratdiff/compare/1.0.0...main 
+[1.0.0]: https://github.com/fowles/pratdiff/compare/0.1.9...1.0.0 
 [0.1.9]: https://github.com/fowles/pratdiff/compare/0.1.8...0.1.9 
 [0.1.8]: https://github.com/fowles/pratdiff/compare/0.1.7...0.1.8 
 [0.1.7]: https://github.com/fowles/pratdiff/compare/0.1.6...0.1.7 
