@@ -55,7 +55,7 @@ impl<'a> Iterator for SplitIter<'a> {
   type Item = &'a str;
 
   fn next(&mut self) -> Option<&'a str> {
-    let ws = std::take(self.whitespace);
+    let ws = std::mem::take(&mut self.whitespace);
     if !ws.is_empty() {
       return Some(ws);
     }
@@ -65,7 +65,7 @@ impl<'a> Iterator for SplitIter<'a> {
     }
 
     let Some(m) = self.regex.find(self.content) else {
-      let s = std::take(self.content);
+      let s = std::mem::take(&mut self.content);
       return Some(s);
     };
 
@@ -126,12 +126,12 @@ fn accumulate_diffs<L: Line + ?Sized>(
 }
 
 fn leading_match_len<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> usize {
-  zip(lhs, rhs).take_while(|(&l, &r)| l == r).count()
+  zip(lhs, rhs).take_while(|(l, r)| l == r).count()
 }
 
 fn trailing_match_len<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> usize {
   zip(lhs.iter().rev(), rhs.iter().rev())
-    .take_while(|(&l, &r)| l == r)
+    .take_while(|(l, r)| l == r)
     .count()
 }
 
