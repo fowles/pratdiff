@@ -1,14 +1,17 @@
 use crate::style::Styles;
-use diff::DiffItem::*;
+use crate::Diff;
+use crate::Line;
+use crate::{diff, tokenize_lines};
 use diff::DiffItem;
+use diff::DiffItem::*;
 use diff::Hunk;
 use diff::Side;
-use crate::{diff, tokenize_lines};
 use owo_colors::OwoColorize;
 use owo_colors::Style;
 use std::error::Error;
 use std::io::Result;
 use std::io::Write;
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 pub struct Printer<'a> {
@@ -116,7 +119,11 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  pub fn print_diff(&mut self, lhs_all: &str, rhs_all: &str) -> Result<()> {
+  pub fn print_diff<D: Deref>(&mut self, lhs_all: &D, rhs_all: &D) -> Result<()>
+  where
+    D::Target: Diff,
+    <D::Target as Diff>::Line: Line + std::fmt::Display,
+  {
     let lhs: Vec<_> = lhs_all.lines().collect();
     let rhs: Vec<_> = rhs_all.lines().collect();
     let diffs = diff(&lhs, &rhs);
@@ -146,10 +153,10 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  fn print_hunk_body(
+  fn print_hunk_body<L: Line + ?Sized + std::fmt::Display>(
     &mut self,
-    lhs_lines: &[&str],
-    rhs_lines: &[&str],
+    lhs_lines: &[&L],
+    rhs_lines: &[&L],
     diffs: &[DiffItem],
   ) -> Result<()> {
     for d in diffs {
@@ -174,9 +181,9 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  fn print_lines(
+  fn print_lines<L: Line + ?Sized + std::fmt::Display>(
     &mut self,
-    lines: &[&str],
+    lines: &[&L],
     prefix: &str,
     style: Style,
   ) -> Result<()> {
@@ -186,10 +193,10 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  fn print_mutation(
+  fn print_mutation<L: Line + ?Sized + std::fmt::Display>(
     &mut self,
-    lhs_lines: &[&str],
-    rhs_lines: &[&str],
+    lhs_lines: &[&L],
+    rhs_lines: &[&L],
   ) -> Result<()> {
     let lhs_tokens = tokenize_lines(lhs_lines);
     let rhs_tokens = tokenize_lines(rhs_lines);
@@ -213,9 +220,9 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  fn print_mutation_side(
+  fn print_mutation_side<L: Line + ?Sized + std::fmt::Display>(
     &mut self,
-    tokens: &[&str],
+    tokens: &[&L],
     diffs: &[DiffItem],
     prefix: &str,
     side: Side,
@@ -227,7 +234,7 @@ impl<'a> Printer<'a> {
       let style = if matches!(d, Match { .. }) { matching } else { mutation };
       for &t in &tokens[d.side(side)] {
         write!(self.writer, "{}", t.style(style))?;
-        if t == "\n" {
+        if t == L::delimiter() {
           write!(self.writer, "{}", prefix.style(mutation))?;
         }
       }
