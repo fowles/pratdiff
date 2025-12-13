@@ -107,7 +107,6 @@ fn walk_dirs<
   rhs_root: &Path,
   mut handler: Handler,
 ) -> Result<(), Box<dyn Error>>
-where
 {
   let mut lhs = WalkDir::new(lhs_root)
     .sort_by_file_name()
