@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-03-23
+
 ### Changed
 
 - Update dependencies
@@ -92,7 +94,8 @@ Initial release.
 - Directory walking
 
 
-[Unreleased]: https://github.com/fowles/pratdiff/compare/1.0.0...main 
+[Unreleased]: https://github.com/fowles/pratdiff/compare/2.0.0...main
+[2.0.0]: https://github.com/fowles/pratdiff/compare/1.0.0...2.0.0
 [1.0.0]: https://github.com/fowles/pratdiff/compare/0.1.9...1.0.0 
 [0.1.9]: https://github.com/fowles/pratdiff/compare/0.1.8...0.1.9 
 [0.1.8]: https://github.com/fowles/pratdiff/compare/0.1.7...0.1.8 

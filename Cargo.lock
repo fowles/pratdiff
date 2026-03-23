@@ -303,7 +303,7 @@ checksum = "d211803b9b6b570f68772237e415a029d5a50c65d382910b879fb19d3271f94d"
 
 [[package]]
 name = "pratdiff"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "anstream",
  "cfg-if",
