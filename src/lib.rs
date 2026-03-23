@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::iter::zip;
 use std::iter::Iterator;
+use unicode_segmentation::UnicodeSegmentation;
 
 mod diff;
 mod files;
@@ -16,6 +17,20 @@ pub use style::Styles;
 
 struct ByteTokenIter<'a> {
   content: &'a [u8],
+  valid: &'a str,
+}
+
+impl<'a> ByteTokenIter<'a> {
+  fn new(content: &'a [u8]) -> Self {
+    ByteTokenIter { content, valid: valid_prefix(content) }
+  }
+}
+
+fn valid_prefix(content: &[u8]) -> &str {
+  match std::str::from_utf8(content) {
+    Ok(s) => s,
+    Err(e) => std::str::from_utf8(&content[..e.valid_up_to()]).unwrap(),
+  }
 }
 
 impl<'a> Iterator for ByteTokenIter<'a> {
@@ -25,38 +40,49 @@ impl<'a> Iterator for ByteTokenIter<'a> {
     if self.content.is_empty() {
       return None;
     }
-    let b = self.content[0];
-    let pos = if b.is_ascii_whitespace() {
-      self
-        .content
-        .iter()
-        .position(|c| !c.is_ascii_whitespace())
-        .unwrap_or(self.content.len())
-    } else if b.is_ascii_digit() {
-      self
-        .content
-        .iter()
-        .position(|c| !c.is_ascii_digit())
-        .unwrap_or(self.content.len())
-    } else if b.is_ascii_alphabetic() || b == b'_' {
-      self
-        .content
-        .iter()
-        .position(|c| !(c.is_ascii_alphanumeric() || *c == b'_'))
-        .unwrap_or(self.content.len())
-    } else if b.is_ascii() {
-      1 // ASCII symbol: always a single-byte token
-    } else {
-      // Non-ASCII (>= 0x80): consume all consecutive high-bit bytes so that
-      // multi-byte UTF-8 characters stay as one token.
-      self
-        .content
-        .iter()
-        .position(|c| c.is_ascii())
-        .unwrap_or(self.content.len())
+
+    // If the valid prefix is exhausted we're sitting on an invalid sequence.
+    // Emit it as a single opaque token, then recompute the next valid prefix.
+    if self.valid.is_empty() {
+      let n = std::str::from_utf8(self.content)
+        .err()
+        .and_then(|e| e.error_len())
+        .unwrap_or(1);
+      let (token, rest) = self.content.split_at(n);
+      self.content = rest;
+      self.valid = valid_prefix(self.content);
+      return Some(token);
+    }
+
+    let mut graphemes = self.valid.grapheme_indices(true);
+    let (_, first) = graphemes.next().unwrap();
+    let first_char = first.chars().next().unwrap();
+
+    let scan = |pred: &dyn Fn(char) -> bool| {
+      let mut end = first.len();
+      for (off, g) in graphemes {
+        if g.chars().next().map_or(false, pred) {
+          end = off + g.len();
+        } else {
+          break;
+        }
+      }
+      end
     };
-    let (token, remainder) = self.content.split_at(pos);
-    self.content = remainder;
+
+    let end = if first_char.is_ascii_whitespace() {
+      scan(&|c| c.is_ascii_whitespace())
+    } else if first_char.is_ascii_digit() {
+      scan(&|c| c.is_ascii_digit())
+    } else if first_char.is_ascii_alphabetic() || first_char == '_' {
+      scan(&|c| c.is_ascii_alphanumeric() || c == '_')
+    } else {
+      first.len() // single ASCII symbol or non-ASCII grapheme cluster
+    };
+
+    let (token, rest) = self.content.split_at(end);
+    self.content = rest;
+    self.valid = &self.valid[end..];
     Some(token)
   }
 }
@@ -70,7 +96,7 @@ pub fn diff(lhs: &[&[u8]], rhs: &[&[u8]]) -> Vec<DiffItem> {
 pub fn tokenize_lines<'a>(lines: &[&'a [u8]]) -> Vec<&'a [u8]> {
   let mut v: Vec<_> = lines
     .iter()
-    .flat_map(|l| ByteTokenIter { content: l }.chain([b"\n" as &[u8]]))
+    .flat_map(|l| ByteTokenIter::new(l).chain([b"\n" as &[u8]]))
     .collect();
   v.pop();
   v
@@ -422,6 +448,25 @@ mod tests {
     assert_eq!(
       hunk_positions(&Hunk::build(0, &diff)),
       &[((1, 8), (1, 0)), ((17, 0), (9, 8))]
+    );
+  }
+
+  #[test]
+  fn tokenize_invalid_utf8() {
+    // 0xFF is not valid UTF-8; should be its own token between "foo" and "bar"
+    assert_eq!(
+      tokenize_lines(&[b"foo\xffbar"]),
+      &[b"foo" as &[u8], b"\xff", b"bar"],
+    );
+  }
+
+  #[test]
+  fn tokenize_combining_diacritics() {
+    // "café" with decomposed é: e (U+0065) + combining acute accent (U+0301 = 0xCC 0x81)
+    // Should be one identifier token, not split at the combining mark.
+    assert_eq!(
+      tokenize_lines(&[b"cafe\xcc\x81"]),
+      &[b"cafe\xcc\x81" as &[u8]],
     );
   }
 
