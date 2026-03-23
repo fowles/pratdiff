@@ -1,6 +1,4 @@
 use crate::style::Styles;
-use crate::Diff;
-use crate::Line;
 use crate::{diff, tokenize_lines};
 use diff::DiffItem;
 use diff::DiffItem::*;
@@ -11,7 +9,6 @@ use owo_colors::Style;
 use std::error::Error;
 use std::io::Result;
 use std::io::Write;
-use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 pub struct Printer<'a> {
@@ -19,6 +16,14 @@ pub struct Printer<'a> {
   writer: &'a mut dyn Write,
   context: usize,
   common_prefix: PathBuf,
+}
+
+fn split_lines(content: &[u8]) -> Vec<&[u8]> {
+  if content.is_empty() {
+    return vec![];
+  }
+  let content = content.strip_suffix(b"\n").unwrap_or(content);
+  content.split(|b| *b == b'\n').collect()
 }
 
 impl<'a> Printer<'a> {
@@ -119,13 +124,9 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  pub fn print_diff<D: Deref>(&mut self, lhs_all: &D, rhs_all: &D) -> Result<()>
-  where
-    D::Target: Diff,
-    <D::Target as Diff>::Line: Line + std::fmt::Display,
-  {
-    let lhs: Vec<_> = lhs_all.lines().collect();
-    let rhs: Vec<_> = rhs_all.lines().collect();
+  pub fn print_diff(&mut self, lhs_all: &[u8], rhs_all: &[u8]) -> Result<()> {
+    let lhs = split_lines(lhs_all);
+    let rhs = split_lines(rhs_all);
     let diffs = diff(&lhs, &rhs);
     let hunks = Hunk::build(self.context, &diffs);
 
@@ -153,10 +154,10 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  fn print_hunk_body<L: Line + ?Sized + std::fmt::Display>(
+  fn print_hunk_body(
     &mut self,
-    lhs_lines: &[&L],
-    rhs_lines: &[&L],
+    lhs_lines: &[&[u8]],
+    rhs_lines: &[&[u8]],
     diffs: &[DiffItem],
   ) -> Result<()> {
     for d in diffs {
@@ -181,22 +182,23 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  fn print_lines<L: Line + ?Sized + std::fmt::Display>(
+  fn print_lines(
     &mut self,
-    lines: &[&L],
+    lines: &[&[u8]],
     prefix: &str,
     style: Style,
   ) -> Result<()> {
     for line in lines {
-      writeln!(self.writer, "{}{}", prefix.style(style), line.style(style))?;
+      let s = String::from_utf8_lossy(line);
+      writeln!(self.writer, "{}{}", prefix.style(style), s.style(style))?;
     }
     Ok(())
   }
 
-  fn print_mutation<L: Line + ?Sized + std::fmt::Display>(
+  fn print_mutation(
     &mut self,
-    lhs_lines: &[&L],
-    rhs_lines: &[&L],
+    lhs_lines: &[&[u8]],
+    rhs_lines: &[&[u8]],
   ) -> Result<()> {
     let lhs_tokens = tokenize_lines(lhs_lines);
     let rhs_tokens = tokenize_lines(rhs_lines);
@@ -220,9 +222,9 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  fn print_mutation_side<L: Line + ?Sized + std::fmt::Display>(
+  fn print_mutation_side(
     &mut self,
-    tokens: &[&L],
+    tokens: &[&[u8]],
     diffs: &[DiffItem],
     prefix: &str,
     side: Side,
@@ -233,8 +235,9 @@ impl<'a> Printer<'a> {
     for d in diffs {
       let style = if matches!(d, Match { .. }) { matching } else { mutation };
       for &t in &tokens[d.side(side)] {
-        write!(self.writer, "{}", t.style(style))?;
-        if t == L::delimiter() {
+        let s = String::from_utf8_lossy(t);
+        write!(self.writer, "{}", s.style(style))?;
+        if t == b"\n" {
           write!(self.writer, "{}", prefix.style(mutation))?;
         }
       }

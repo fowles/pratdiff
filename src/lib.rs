@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 use std::iter::zip;
 use std::iter::Iterator;
 
@@ -15,91 +14,63 @@ pub use files::diff_files;
 pub use printer::Printer;
 pub use style::Styles;
 
-pub trait Diff {
-  type Line: Line + ?Sized;
-  fn lines(&self) -> impl Iterator<Item = &Self::Line>;
+struct ByteTokenIter<'a> {
+  content: &'a [u8],
 }
 
-impl Diff for str {
-  type Line = str;
-  fn lines(&self) -> impl Iterator<Item = &Self::Line> {
-    self.lines()
-  }
-}
+impl<'a> Iterator for ByteTokenIter<'a> {
+  type Item = &'a [u8];
 
-pub trait Line: Hash + Eq {
-  fn tokenize(&self) -> impl Iterator<Item = &Self>;
-  fn delimiter<'a>() -> &'a Self;
-}
-
-impl Line for str {
-  fn tokenize(&self) -> impl Iterator<Item = &Self> {
-    StrTokenIter { content: self }
-  }
-
-  fn delimiter<'a>() -> &'a Self {
-    "\n"
-  }
-}
-
-struct StrTokenIter<'a> {
-  content: &'a str,
-}
-
-impl<'a> Iterator for StrTokenIter<'a> {
-  type Item = &'a str;
-
-  fn next(&mut self) -> Option<&'a str> {
+  fn next(&mut self) -> Option<&'a [u8]> {
     if self.content.is_empty() {
       return None;
     }
-
-    let pos = if self.content.starts_with(char::is_whitespace) {
+    let b = self.content[0];
+    let pos = if b.is_ascii_whitespace() {
       self
         .content
-        .find(|c: char| !c.is_whitespace())
+        .iter()
+        .position(|c| !c.is_ascii_whitespace())
         .unwrap_or(self.content.len())
-    } else if self.content.starts_with(char::is_numeric) {
+    } else if b.is_ascii_digit() {
       self
         .content
-        .find(|c: char| !c.is_numeric())
+        .iter()
+        .position(|c| !c.is_ascii_digit())
         .unwrap_or(self.content.len())
-    } else if self
-      .content
-      .starts_with(|c: char| c.is_alphabetic() || c == '_')
-    {
-      // Once we have verified that it starts with an alphabetic character,
-      // we also want to include numbers in the token.
+    } else if b.is_ascii_alphabetic() || b == b'_' {
       self
         .content
-        .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .iter()
+        .position(|c| !(c.is_ascii_alphanumeric() || *c == b'_'))
         .unwrap_or(self.content.len())
+    } else if b.is_ascii() {
+      1 // ASCII symbol: always a single-byte token
     } else {
+      // Non-ASCII (>= 0x80): consume all consecutive high-bit bytes so that
+      // multi-byte UTF-8 characters stay as one token.
       self
         .content
-        .char_indices()
-        .skip(1)
-        .next()
-        .unwrap_or((self.content.len(), ' '))
-        .0
+        .iter()
+        .position(|c| c.is_ascii())
+        .unwrap_or(self.content.len())
     };
-
     let (token, remainder) = self.content.split_at(pos);
     self.content = remainder;
     Some(token)
   }
 }
 
-pub fn diff<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> Vec<DiffItem> {
+pub fn diff(lhs: &[&[u8]], rhs: &[&[u8]]) -> Vec<DiffItem> {
   let mut d = Diffs::default();
   accumulate_partitions(&mut d, lhs, rhs);
   d.vec
 }
 
-pub fn tokenize_lines<'a, L: Line + ?Sized>(lines: &[&'a L]) -> Vec<&'a L> {
+pub fn tokenize_lines<'a>(lines: &[&'a [u8]]) -> Vec<&'a [u8]> {
   let mut v: Vec<_> = lines
     .iter()
-    .flat_map(|l| l.tokenize().chain([L::delimiter()]))
+    .flat_map(|l| ByteTokenIter { content: l }.chain([b"\n" as &[u8]]))
     .collect();
   v.pop();
   v
@@ -114,11 +85,7 @@ pub fn tokenize_lines<'a, L: Line + ?Sized>(lines: &[&'a L]) -> Vec<&'a L> {
 // 3. Find all lines which occur exactly once on both sides, then do longest
 //    common subsequence on those lines, matching them up.
 // 4. Do steps 1-2 on each section between matched lines.
-fn accumulate_diffs<L: Line + ?Sized>(
-  diffs: &mut Diffs,
-  lhs: &[&L],
-  rhs: &[&L],
-) {
+fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&[u8]], rhs: &[&[u8]]) {
   let leading = leading_match_len(lhs, rhs);
   diffs.add_match(leading);
   if leading == lhs.len() && leading == rhs.len() {
@@ -135,21 +102,17 @@ fn accumulate_diffs<L: Line + ?Sized>(
   diffs.add_match(trailing);
 }
 
-fn leading_match_len<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> usize {
+fn leading_match_len(lhs: &[&[u8]], rhs: &[&[u8]]) -> usize {
   zip(lhs, rhs).take_while(|(l, r)| l == r).count()
 }
 
-fn trailing_match_len<L: Line + ?Sized>(lhs: &[&L], rhs: &[&L]) -> usize {
+fn trailing_match_len(lhs: &[&[u8]], rhs: &[&[u8]]) -> usize {
   zip(lhs.iter().rev(), rhs.iter().rev())
     .take_while(|(l, r)| l == r)
     .count()
 }
 
-fn accumulate_partitions<L: Line + ?Sized>(
-  diffs: &mut Diffs,
-  lhs: &[&L],
-  rhs: &[&L],
-) {
+fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&[u8]], rhs: &[&[u8]]) {
   let matched = match_lines(lhs, rhs);
   if matched.is_empty() {
     diffs.add_mutation(lhs.len(), rhs.len());
@@ -168,11 +131,8 @@ fn accumulate_partitions<L: Line + ?Sized>(
   accumulate_diffs(diffs, &lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()]);
 }
 
-fn match_lines<L: Line + ?Sized>(
-  lhs: &[&L],
-  rhs: &[&L],
-) -> Vec<(usize, usize)> {
-  let mut m: HashMap<&L, (Vec<usize>, Vec<usize>)> = HashMap::new();
+fn match_lines(lhs: &[&[u8]], rhs: &[&[u8]]) -> Vec<(usize, usize)> {
+  let mut m: HashMap<&[u8], (Vec<usize>, Vec<usize>)> = HashMap::new();
   for (i, l) in lhs.iter().enumerate() {
     m.entry(l).or_default().0.push(i);
   }
@@ -238,21 +198,29 @@ mod tests {
   use diff::Hunk;
   use std::ops::Range;
 
-  fn diff_lines(lhs: &str, rhs: &str) -> Vec<DiffItem> {
-    let lhs_lines: Vec<_> = lhs.lines().collect();
-    let rhs_lines: Vec<_> = rhs.lines().collect();
+  fn diff_lines(lhs: &[u8], rhs: &[u8]) -> Vec<DiffItem> {
+    let lhs_lines: Vec<_> = split_lines(lhs);
+    let rhs_lines: Vec<_> = split_lines(rhs);
     diff(&lhs_lines, &rhs_lines)
+  }
+
+  fn split_lines(content: &[u8]) -> Vec<&[u8]> {
+    if content.is_empty() {
+      return vec![];
+    }
+    let content = content.strip_suffix(b"\n").unwrap_or(content);
+    content.split(|b| *b == b'\n').collect()
   }
 
   #[test]
   fn diff_empty() {
-    assert_eq!(diff::<str>(&[], &[]), &[]);
+    assert_eq!(diff(&[] as &[&[u8]], &[]), &[]);
   }
 
   #[test]
   fn diff_eq() {
     assert_eq!(
-      diff(&["a", "b", "c"], &["a", "b", "c"]),
+      diff(&[b"a", b"b", b"c"], &[b"a", b"b", b"c"]),
       &[Match {
         lhs: Range { start: 0, end: 3 },
         rhs: Range { start: 0, end: 3 },
@@ -263,7 +231,7 @@ mod tests {
   #[test]
   fn diff_ne() {
     assert_eq!(
-      diff(&["a", "b", "c"], &["a", "c"]),
+      diff(&[b"a", b"b", b"c"], &[b"a", b"c"]),
       &[
         Match {
           lhs: Range { start: 0, end: 1 },
@@ -280,7 +248,7 @@ mod tests {
       ]
     );
     assert_eq!(
-      diff(&["z", "a", "b", "c"], &["a", "c"]),
+      diff(&[b"z", b"a", b"b", b"c"], &[b"a", b"c"]),
       &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
@@ -301,7 +269,7 @@ mod tests {
       ]
     );
     assert_eq!(
-      diff(&["z", "a", "e", "b", "c"], &["a", "e", "c"]),
+      diff(&[b"z", b"a", b"e", b"b", b"c"], &[b"a", b"e", b"c"]),
       &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
@@ -326,7 +294,7 @@ mod tests {
   #[test]
   fn diff_only_non_unique() {
     assert_eq!(
-      diff(&["a", "b", "b", "c"], &["b", "b"]),
+      diff(&[b"a", b"b", b"b", b"c"], &[b"b", b"b"]),
       &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
@@ -347,7 +315,10 @@ mod tests {
   #[test]
   fn match_lines_arity1() {
     assert_eq!(
-      match_lines(&["a", "b", "c", "d", "e", "d"], &["a", "c", "d", "e"]),
+      match_lines(
+        &[b"a", b"b", b"c", b"d", b"e", b"d"],
+        &[b"a", b"c", b"d", b"e"]
+      ),
       vec![(0, 0), (2, 1), (4, 3)],
     );
   }
@@ -355,7 +326,7 @@ mod tests {
   #[test]
   fn match_lines_arity2() {
     assert_eq!(
-      match_lines(&["a", "b", "b", "c"], &["b", "b"]),
+      match_lines(&[b"a", b"b", b"b", b"c"], &[b"b", b"b"]),
       vec![(1, 0), (2, 1)],
     );
   }
@@ -386,7 +357,7 @@ mod tests {
   #[test]
   fn lead_trail_overlap() {
     assert_eq!(
-      diff(&["a", "b", "d", "b", "c"], &["a", "b", "c"]),
+      diff(&[b"a", b"b", b"d", b"b", b"c"], &[b"a", b"b", b"c"]),
       &[
         Match {
           lhs: Range { start: 0, end: 2 },
@@ -408,8 +379,8 @@ mod tests {
   fn lead_move_txt() {
     assert_eq!(
       diff_lines(
-        include_str!("testdata/old/move.txt"),
-        include_str!("testdata/new/move.txt"),
+        include_bytes!("testdata/old/move.txt"),
+        include_bytes!("testdata/new/move.txt"),
       ),
       &[
         Mutation {
@@ -441,8 +412,8 @@ mod tests {
   #[test]
   fn build_hunks() {
     let diff = diff_lines(
-      include_str!("testdata/old/move.txt"),
-      include_str!("testdata/new/move.txt"),
+      include_bytes!("testdata/old/move.txt"),
+      include_bytes!("testdata/new/move.txt"),
     );
     assert_eq!(
       hunk_positions(&Hunk::build(3, &diff)),
@@ -457,10 +428,23 @@ mod tests {
   #[test]
   fn tokenize() {
     assert_eq!(
-      tokenize_lines(&["void func1() {", "  x += 1"]),
+      tokenize_lines(&[b"void func1() {", b"  x += 1"]),
       &[
-        "void", " ", "func1", "(", ")", " ", "{", "\n", "  ", "x", " ", "+", "=", " ",
-        "1"
+        b"void" as &[u8],
+        b" ",
+        b"func1",
+        b"(",
+        b")",
+        b" ",
+        b"{",
+        b"\n",
+        b"  ",
+        b"x",
+        b" ",
+        b"+",
+        b"=",
+        b" ",
+        b"1"
       ],
     );
   }

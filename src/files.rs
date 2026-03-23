@@ -89,14 +89,13 @@ fn diff_file_candidates(
     return Ok(());
   }
 
-  let (Ok(l), Ok(r)) = (String::from_utf8(lhs_raw), String::from_utf8(rhs_raw))
-  else {
+  if std::str::from_utf8(&lhs_raw).is_err() || std::str::from_utf8(&rhs_raw).is_err() {
     p.print_binary_files_differ(lhs_path, rhs_path)?;
     return Ok(());
-  };
+  }
 
   p.print_file_header(lhs_path, rhs_path)?;
-  p.print_diff(&l, &r)?;
+  p.print_diff(&lhs_raw, &rhs_raw)?;
   Ok(())
 }
 
