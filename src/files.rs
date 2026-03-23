@@ -12,6 +12,10 @@ pub fn diff_files(
   lhs: &Path,
   rhs: &Path,
 ) -> Result<(), Box<dyn Error>> {
+  let stdin = Path::new("-");
+  if lhs == stdin || rhs == stdin {
+    return diff_file_candidates(p, Some(lhs), Some(rhs));
+  }
   match (lhs.metadata()?.is_dir(), rhs.metadata()?.is_dir()) {
     (false, false) => diff_file_candidates(p, Some(lhs), Some(rhs)),
     (true, true) => diff_directories(p, lhs, rhs),
