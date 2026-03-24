@@ -5,7 +5,14 @@ use std::error::Error;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
-#[command(version)]
+#[command(version = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("VERGEN_GIT_DESCRIBE"),
+    ", built ",
+    env!("VERGEN_BUILD_DATE"),
+    ")"
+))]
 #[command(about = "Diff files using patience algorithm")]
 struct Args {
   /// Path to old file, directory tree, or `-` for stdin.
