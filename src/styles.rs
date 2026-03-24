@@ -3,17 +3,18 @@ use owo_colors::Style;
 /// Defaults to using the terminal default colors.
 #[derive(Default)]
 pub struct Styles {
-  pub(crate) header: Style,
-  pub(crate) separator: Style,
-  pub(crate) both: Style,
-  pub(crate) old: Style,
-  pub(crate) old_dim: Style,
-  pub(crate) new: Style,
-  pub(crate) new_dim: Style,
+  pub header: Style,
+  pub separator: Style,
+  pub both: Style,
+  pub old: Style,
+  pub old_dim: Style,
+  pub new: Style,
+  pub new_dim: Style,
 }
 
 impl Styles {
-  /// A simple set of color choices reasonable for most colorized terminal output.
+  /// A simple set of color choices reasonable for most colorized terminal
+  /// output.
   pub fn simple() -> Styles {
     Styles {
       header: Style::new().bold().white(),

@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added diff clustering with `--cluster`
+- Added build stamps to `--version`
+
 ### Changed
 
-- Added build stamps to `--version`
+- reworks parts of the library API
 
 ## [2.0.0] - 2026-03-23
 

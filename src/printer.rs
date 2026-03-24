@@ -1,29 +1,28 @@
-use crate::style::Styles;
-use crate::{diff, tokenize_lines};
-use diff::DiffItem;
-use diff::DiffItem::*;
-use diff::Hunk;
-use diff::Side;
-use owo_colors::OwoColorize;
-use owo_colors::Style;
 use std::error::Error;
 use std::io::Result;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
+
+use diff::DiffItem;
+use diff::DiffItem::*;
+use diff::Side;
+use owo_colors::OwoColorize;
+use owo_colors::Style;
+
+use crate::cluster::DiffCluster;
+use crate::diff;
+use crate::files::FilePairEvent;
+use crate::hunks::Hunk;
+use crate::styles::Styles;
+use crate::tokenize_lines;
+use crate::tokens::split_lines;
 
 pub struct Printer<'a> {
-  pub styles: Styles,
+  styles: Styles,
   writer: &'a mut dyn Write,
   context: usize,
   common_prefix: PathBuf,
-}
-
-fn split_lines(content: &[u8]) -> Vec<&[u8]> {
-  if content.is_empty() {
-    return vec![];
-  }
-  let content = content.strip_suffix(b"\n").unwrap_or(content);
-  content.split(|b| *b == b'\n').collect()
 }
 
 impl<'a> Printer<'a> {
@@ -38,6 +37,43 @@ impl<'a> Printer<'a> {
       context,
       common_prefix,
     }
+  }
+
+  pub fn print_file_pair_event(&mut self, event: FilePairEvent) -> Result<()> {
+    match event {
+      FilePairEvent::TextDiff {
+        lhs_path,
+        rhs_path,
+        lhs_content,
+        rhs_content,
+      } => {
+        self.print_file_header(lhs_path.as_deref(), rhs_path.as_deref())?;
+        self.print_diff(&lhs_content, &rhs_content)?;
+      }
+      FilePairEvent::Binary { lhs_path, rhs_path } => {
+        self.print_binary_files_differ(
+          lhs_path.as_deref(),
+          rhs_path.as_deref(),
+        )?;
+      }
+      FilePairEvent::TypeMismatch { lhs_path, rhs_path } => {
+        self.print_directory_mismatch(&lhs_path, &rhs_path)?;
+      }
+      FilePairEvent::IoError { lhs_path, rhs_path, err } => {
+        writeln!(
+          self.writer,
+          "Error diffing {} and {}:\n{}",
+          self
+            .display_name(lhs_path.as_deref())
+            .style(self.styles.old),
+          self
+            .display_name(rhs_path.as_deref())
+            .style(self.styles.new),
+          err,
+        )?;
+      }
+    }
+    Ok(())
   }
 
   fn display_name(&self, p: Option<&Path>) -> String {
@@ -74,11 +110,7 @@ impl<'a> Printer<'a> {
     rhs: &Path,
   ) -> Result<()> {
     fn ft(p: &Path) -> &str {
-      if p.metadata().unwrap().is_dir() {
-        "directory"
-      } else {
-        "file"
-      }
+      if p.metadata().unwrap().is_dir() { "directory" } else { "file" }
     }
     writeln!(
       self.writer,
@@ -243,6 +275,37 @@ impl<'a> Printer<'a> {
       }
     }
     writeln!(self.writer)?;
+    Ok(())
+  }
+
+  pub fn print_clusters(&mut self, clusters: &[DiffCluster]) -> Result<()> {
+    for cluster in clusters {
+      self.print_cluster(cluster)?;
+    }
+    Ok(())
+  }
+
+  fn print_cluster(&mut self, cluster: &DiffCluster) -> Result<()> {
+    let total: usize = cluster.entries.values().sum();
+    let width = format!("{total}").len();
+    writeln!(
+      self.writer,
+      "{}",
+      format!("=== {total:width$} total occurrences").style(self.styles.header),
+    )?;
+    for (entry, &count) in &cluster.entries {
+      let lhs = self.display_name(entry.lhs_path.as_deref());
+      let rhs = self.display_name(entry.rhs_path.as_deref());
+      write!(
+        self.writer,
+        "{}",
+        format!("=== {count:width$} in ").style(self.styles.separator)
+      )?;
+      write!(self.writer, "{}", lhs.style(self.styles.old))?;
+      write!(self.writer, "{}", " -> ".style(self.styles.separator))?;
+      writeln!(self.writer, "{}", rhs.style(self.styles.new))?;
+    }
+    self.print_diff(&cluster.exemplar_lhs, &cluster.exemplar_rhs)?;
     Ok(())
   }
 }

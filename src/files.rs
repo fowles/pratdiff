@@ -1,64 +1,236 @@
 use std::cmp::Ordering;
-use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use walkdir::{DirEntry, WalkDir};
+use std::path::PathBuf;
 
-use crate::printer::Printer;
+use walkdir::DirEntry;
+use walkdir::WalkDir;
 
-pub fn diff_files(
-  p: &mut Printer,
-  lhs: &Path,
-  rhs: &Path,
-) -> Result<(), Box<dyn Error>> {
+/// An event produced by walking a pair of paths.
+pub enum FilePairEvent {
+  /// A pair of diffable (non-identical, non-binary) text files.
+  TextDiff {
+    lhs_path: Option<PathBuf>,
+    rhs_path: Option<PathBuf>,
+    lhs_content: Vec<u8>,
+    rhs_content: Vec<u8>,
+  },
+  /// Files that differ but at least one is non-UTF-8.
+  Binary {
+    lhs_path: Option<PathBuf>,
+    rhs_path: Option<PathBuf>,
+  },
+  /// One path is a file and the other is a directory.
+  TypeMismatch { lhs_path: PathBuf, rhs_path: PathBuf },
+  /// An I/O or other error while processing this pair.
+  IoError {
+    lhs_path: Option<PathBuf>,
+    rhs_path: Option<PathBuf>,
+    err: String,
+  },
+}
+
+enum IterState {
+  /// Walking two directory trees in parallel.
+  Dirs(DirWalkState),
+  /// A single pre-computed event.
+  Once(Option<FilePairEvent>),
+}
+
+struct DirWalkState {
+  lhs_root: PathBuf,
+  rhs_root: PathBuf,
+  lhs_iter: Box<dyn Iterator<Item = DirEntry>>,
+  rhs_iter: Box<dyn Iterator<Item = DirEntry>>,
+  lhs_next: Option<DirEntry>,
+  rhs_next: Option<DirEntry>,
+}
+
+fn make_walk_iter(root: &Path) -> Box<dyn Iterator<Item = DirEntry>> {
+  Box::new(
+    WalkDir::new(root)
+      .sort_by_file_name()
+      .min_depth(1)
+      .into_iter()
+      .filter_map(|e| e.ok()),
+  )
+}
+
+impl DirWalkState {
+  /// Advance the walk, skipping identical things.
+  fn advance(&mut self) -> Option<FilePairEvent> {
+    loop {
+      let ord = compare_entries(
+        &self.lhs_next,
+        &self.rhs_next,
+        &self.lhs_root,
+        &self.rhs_root,
+      );
+      match ord {
+        Ordering::Equal
+          if self.lhs_next.is_none() && self.rhs_next.is_none() =>
+        {
+          return None;
+        }
+        Ordering::Equal => {
+          let lhs = self.lhs_next.take();
+          let rhs = self.rhs_next.take();
+          self.lhs_next = self.lhs_iter.next();
+          self.rhs_next = self.rhs_iter.next();
+          if let Some(event) = process_entry_pair(lhs.as_ref(), rhs.as_ref()) {
+            return Some(event);
+          }
+        }
+        Ordering::Less => {
+          let lhs = self.lhs_next.take();
+          self.lhs_next = self.lhs_iter.next();
+          if let Some(event) = process_entry_pair(lhs.as_ref(), None) {
+            return Some(event);
+          }
+        }
+        Ordering::Greater => {
+          let rhs = self.rhs_next.take();
+          self.rhs_next = self.rhs_iter.next();
+          if let Some(event) = process_entry_pair(None, rhs.as_ref()) {
+            return Some(event);
+          }
+        }
+      }
+    }
+  }
+}
+
+/// A lazy iterator over file pair events.
+pub struct FilePairIter {
+  state: IterState,
+}
+
+impl Iterator for FilePairIter {
+  type Item = FilePairEvent;
+
+  fn next(&mut self) -> Option<FilePairEvent> {
+    match &mut self.state {
+      IterState::Dirs(walk) => walk.advance(),
+      IterState::Once(event) => event.take(),
+    }
+  }
+}
+
+/// Walk lhs and rhs (files or directory trees) and yield an event for each
+/// differing file pair encountered.
+pub fn walk_file_pairs(lhs: &Path, rhs: &Path) -> FilePairIter {
   let stdin = Path::new("-");
   if lhs == stdin || rhs == stdin {
-    return diff_file_candidates(p, Some(lhs), Some(rhs));
+    return FilePairIter {
+      state: IterState::Once(process_file_pair(
+        Some(lhs.to_path_buf()),
+        Some(rhs.to_path_buf()),
+      )),
+    };
   }
-  match (lhs.metadata()?.is_dir(), rhs.metadata()?.is_dir()) {
-    (false, false) => diff_file_candidates(p, Some(lhs), Some(rhs)),
-    (true, true) => diff_directories(p, lhs, rhs),
-    _ => Ok(p.print_directory_mismatch(lhs, rhs)?),
-  }
-}
+  let lhs = lhs.to_path_buf();
+  let rhs = rhs.to_path_buf();
 
-fn diff_directories(
-  p: &mut Printer,
-  lhs: &Path,
-  rhs: &Path,
-) -> Result<(), Box<dyn Error>> {
-  walk_dirs(lhs, rhs, |l, r| {
-    if let Err(e) = diff_entries(p, l, r) {
-      p.print_error(
-        l.as_ref().map(|l| l.path()),
-        r.as_ref().map(|r| r.path()),
-        e,
-      )?;
+  let lhs_is_dir = match lhs.metadata() {
+    Ok(m) => m.is_dir(),
+    Err(e) => {
+      return FilePairIter {
+        state: IterState::Once(Some(FilePairEvent::IoError {
+          lhs_path: Some(lhs),
+          rhs_path: Some(rhs),
+          err: e.to_string(),
+        })),
+      };
     }
-    Ok(())
-  })
+  };
+  let rhs_is_dir = match rhs.metadata() {
+    Ok(m) => m.is_dir(),
+    Err(e) => {
+      return FilePairIter {
+        state: IterState::Once(Some(FilePairEvent::IoError {
+          lhs_path: Some(lhs),
+          rhs_path: Some(rhs),
+          err: e.to_string(),
+        })),
+      };
+    }
+  };
+  match (lhs_is_dir, rhs_is_dir) {
+    (false, false) => FilePairIter {
+      state: IterState::Once(process_file_pair(Some(lhs), Some(rhs))),
+    },
+    (true, true) => {
+      let lhs_root = lhs;
+      let mut lhs_iter = make_walk_iter(&lhs_root);
+      let lhs_next = lhs_iter.next();
+
+      let rhs_root = rhs;
+      let mut rhs_iter = make_walk_iter(&rhs_root);
+      let rhs_next = rhs_iter.next();
+
+      FilePairIter {
+        state: IterState::Dirs(DirWalkState {
+          lhs_root,
+          rhs_root,
+          lhs_iter,
+          rhs_iter,
+          lhs_next,
+          rhs_next,
+        }),
+      }
+    }
+    _ => FilePairIter {
+      state: IterState::Once(Some(FilePairEvent::TypeMismatch {
+        lhs_path: lhs,
+        rhs_path: rhs,
+      })),
+    },
+  }
 }
 
-fn diff_entries(
-  p: &mut Printer,
-  lhs: &Option<DirEntry>,
-  rhs: &Option<DirEntry>,
-) -> Result<(), Box<dyn Error>> {
+fn compare_entries(
+  l: &Option<DirEntry>,
+  r: &Option<DirEntry>,
+  lhs_root: &Path,
+  rhs_root: &Path,
+) -> Ordering {
+  match (l, r) {
+    (None, None) => Ordering::Equal,
+    (Some(_), None) => Ordering::Less,
+    (None, Some(_)) => Ordering::Greater,
+    (Some(lhs), Some(rhs)) => {
+      let lhs_rel = lhs.path().strip_prefix(lhs_root).unwrap();
+      let rhs_rel = rhs.path().strip_prefix(rhs_root).unwrap();
+      lhs_rel.cmp(rhs_rel)
+    }
+  }
+}
+
+fn is_dir(entry: &DirEntry) -> bool {
+  entry.metadata().map(|m| m.is_dir()).unwrap_or(false)
+}
+
+/// Process one matched directory entry pair. Returns `None` for pairs that
+/// should be skipped (directories, identical inodes, identical file contents).
+fn process_entry_pair(
+  lhs: Option<&DirEntry>,
+  rhs: Option<&DirEntry>,
+) -> Option<FilePairEvent> {
   match (lhs, rhs) {
-    (None, None) => Ok(()),
+    (None, None) => None,
     (Some(lhs), None) => {
-      if lhs.metadata()?.is_dir() {
-        Ok(())
+      if is_dir(lhs) {
+        None
       } else {
-        diff_file_candidates(p, Some(lhs.path()), None)
+        process_file_pair(Some(lhs.path().to_path_buf()), None)
       }
     }
     (None, Some(rhs)) => {
-      if rhs.metadata()?.is_dir() {
-        Ok(())
+      if is_dir(rhs) {
+        None
       } else {
-        diff_file_candidates(p, None, Some(rhs.path()))
+        process_file_pair(None, Some(rhs.path().to_path_buf()))
       }
     }
     (Some(lhs), Some(rhs)) => {
@@ -66,97 +238,56 @@ fn diff_entries(
         if #[cfg(unix)] {
           use walkdir::DirEntryExt;
           if lhs.ino() == rhs.ino() {
-            return Ok(())
+            return None;
           }
         }
       }
-
-      match (lhs.metadata()?.is_dir(), rhs.metadata()?.is_dir()) {
-        (false, false) => {
-          diff_file_candidates(p, Some(lhs.path()), Some(rhs.path()))
-        }
-        (true, true) => Ok(()),
-        _ => Ok(p.print_directory_mismatch(lhs.path(), rhs.path())?),
+      match (is_dir(lhs), is_dir(rhs)) {
+        (true, true) => None,
+        (false, false) => process_file_pair(
+          Some(lhs.path().to_path_buf()),
+          Some(rhs.path().to_path_buf()),
+        ),
+        _ => Some(FilePairEvent::TypeMismatch {
+          lhs_path: lhs.path().to_path_buf(),
+          rhs_path: rhs.path().to_path_buf(),
+        }),
       }
     }
   }
 }
 
-fn diff_file_candidates(
-  p: &mut Printer,
-  lhs_path: Option<&Path>,
-  rhs_path: Option<&Path>,
-) -> Result<(), Box<dyn Error>> {
-  let lhs_raw = read(lhs_path)?;
-  let rhs_raw = read(rhs_path)?;
-  if lhs_raw == rhs_raw {
-    return Ok(());
-  }
-
-  if std::str::from_utf8(&lhs_raw).is_err() || std::str::from_utf8(&rhs_raw).is_err() {
-    p.print_binary_files_differ(lhs_path, rhs_path)?;
-    return Ok(());
-  }
-
-  p.print_file_header(lhs_path, rhs_path)?;
-  p.print_diff(&lhs_raw, &rhs_raw)?;
-  Ok(())
-}
-
-fn walk_dirs<
-  Handler: FnMut(&Option<DirEntry>, &Option<DirEntry>) -> Result<(), Box<dyn Error>>,
->(
-  lhs_root: &Path,
-  rhs_root: &Path,
-  mut handler: Handler,
-) -> Result<(), Box<dyn Error>>
-{
-  let mut lhs = WalkDir::new(lhs_root)
-    .sort_by_file_name()
-    .min_depth(1)
-    .into_iter()
-    .filter_map(|e| e.ok());
-  let mut rhs = WalkDir::new(rhs_root)
-    .sort_by_file_name()
-    .min_depth(1)
-    .into_iter()
-    .filter_map(|e| e.ok());
-
-  let compare = |l: &Option<DirEntry>, r: &Option<DirEntry>| match (&l, &r) {
-    (None, None) => Ordering::Equal,
-    (Some(_), None) => Ordering::Less,
-    (None, Some(_)) => Ordering::Greater,
-    (Some(lhs), Some(rhs)) => {
-      let lhs_relative = lhs.path().strip_prefix(lhs_root).unwrap();
-      let rhs_relative = rhs.path().strip_prefix(rhs_root).unwrap();
-      lhs_relative.cmp(rhs_relative)
+/// Read a file pair, returning the appropriate event or `None` if identical.
+fn process_file_pair(
+  lhs_path: Option<PathBuf>,
+  rhs_path: Option<PathBuf>,
+) -> Option<FilePairEvent> {
+  let lhs = read(lhs_path.as_deref());
+  let rhs = read(rhs_path.as_deref());
+  match (lhs, rhs) {
+    (Err(e), _) | (_, Err(e)) => {
+      Some(FilePairEvent::IoError { lhs_path, rhs_path, err: e.to_string() })
     }
-  };
-  let mut lhs_next = lhs.next();
-  let mut rhs_next = rhs.next();
-  loop {
-    match compare(&lhs_next, &rhs_next) {
-      Ordering::Equal => {
-        if let (None, None) = (&lhs_next, &rhs_next) {
-          return Ok(());
-        }
-        handler(&lhs_next, &rhs_next)?;
-        lhs_next = lhs.next();
-        rhs_next = rhs.next();
+    (Ok(lhs_content), Ok(rhs_content)) => {
+      if lhs_content == rhs_content {
+        return None;
       }
-      Ordering::Less => {
-        handler(&lhs_next, &None)?;
-        lhs_next = lhs.next();
+      if std::str::from_utf8(&lhs_content).is_err()
+        || std::str::from_utf8(&rhs_content).is_err()
+      {
+        return Some(FilePairEvent::Binary { lhs_path, rhs_path });
       }
-      Ordering::Greater => {
-        handler(&None, &rhs_next)?;
-        rhs_next = rhs.next();
-      }
+      Some(FilePairEvent::TextDiff {
+        lhs_path,
+        rhs_path,
+        lhs_content,
+        rhs_content,
+      })
     }
   }
 }
 
-fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn Error>> {
+fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn std::error::Error>> {
   if path == Path::new("-") {
     Ok(Box::new(std::io::stdin()))
   } else {
@@ -164,7 +295,7 @@ fn open(path: &Path) -> Result<Box<dyn Read>, Box<dyn Error>> {
   }
 }
 
-fn read(path: Option<&Path>) -> Result<Vec<u8>, Box<dyn Error>> {
+fn read(path: Option<&Path>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
   let mut buffer = Vec::new();
   if let Some(path) = path {
     let mut file = open(path)?;
@@ -175,6 +306,42 @@ fn read(path: Option<&Path>) -> Result<Vec<u8>, Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
+  use super::*;
+
+  // Tests walk_dirs merge ordering using a lightweight callback (no file I/O).
+  fn walk_dirs_order(
+    lhs_root: &Path,
+    rhs_root: &Path,
+  ) -> Vec<(Option<String>, Option<String>)> {
+    let mut lhs_iter = make_walk_iter(lhs_root);
+    let mut lhs_next = lhs_iter.next();
+
+    let mut rhs_iter = make_walk_iter(rhs_root);
+    let mut rhs_next = rhs_iter.next();
+
+    let mut result = Vec::new();
+    loop {
+      let ord = compare_entries(&lhs_next, &rhs_next, lhs_root, rhs_root);
+      match ord {
+        Ordering::Equal if lhs_next.is_none() && rhs_next.is_none() => break,
+        Ordering::Equal => {
+          result.push((filename(&lhs_next), filename(&rhs_next)));
+          lhs_next = lhs_iter.next();
+          rhs_next = rhs_iter.next();
+        }
+        Ordering::Less => {
+          result.push((filename(&lhs_next), None));
+          lhs_next = lhs_iter.next();
+        }
+        Ordering::Greater => {
+          result.push((None, filename(&rhs_next)));
+          rhs_next = rhs_iter.next();
+        }
+      }
+    }
+    result
+  }
+
   fn filename(entry: &Option<DirEntry>) -> Option<String> {
     entry
       .as_ref()
@@ -183,10 +350,8 @@ mod tests {
       .map(|s| s.to_owned())
   }
 
-  use super::*;
-
   #[test]
-  fn directories() -> Result<(), Box<dyn Error>> {
+  fn directories() -> Result<(), Box<dyn std::error::Error>> {
     let old = tempfile::tempdir()?;
     File::create(old.path().join("1"))?;
     File::create(old.path().join("2"))?;
@@ -196,13 +361,8 @@ mod tests {
     File::create(new.path().join("3"))?;
     File::create(new.path().join("4"))?;
 
-    let mut v = Vec::<(Option<String>, Option<String>)>::new();
-    walk_dirs(old.path(), new.path(), |lhs, rhs| {
-      v.push((filename(&lhs), filename(&rhs)));
-      Ok(())
-    })?;
     assert_eq!(
-      v,
+      walk_dirs_order(old.path(), new.path()),
       &[
         (Some("1".to_owned()), Some("1".to_owned())),
         (Some("2".to_owned()), None),

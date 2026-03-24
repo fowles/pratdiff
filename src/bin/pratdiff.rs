@@ -1,8 +1,11 @@
-use clap::{ColorChoice, CommandFactory, Parser};
-use clap_complete_command::Shell;
-use common_path::common_path;
 use std::error::Error;
 use std::path::PathBuf;
+
+use clap::ColorChoice;
+use clap::CommandFactory;
+use clap::Parser;
+use clap_complete_command::Shell;
+use common_path::common_path;
 
 #[derive(Parser, Debug)]
 #[command(version = concat!(
@@ -34,6 +37,10 @@ struct Args {
   #[clap(long, default_value_t = ColorChoice::Auto)]
   color: ColorChoice,
 
+  /// Group diffs into clusters by change signature
+  #[clap(long)]
+  cluster: bool,
+
   /// The shell to generate the completions for
   #[arg(long = "completions", value_name = "SHELL", value_enum)]
   shell: Option<Shell>,
@@ -64,5 +71,12 @@ fn main() -> Result<(), Box<dyn Error>> {
   let mut stdout = anstream::stdout();
   let mut p =
     pratdiff::Printer::default(&mut stdout, args.context, common_prefix);
-  pratdiff::diff_files(&mut p, &lhs, &rhs)
+
+  if args.cluster {
+    let clusters = pratdiff::cluster_files(&lhs, &rhs);
+    p.print_clusters(&clusters)?;
+  } else {
+    pratdiff::diff_files(&mut p, &lhs, &rhs)?;
+  }
+  Ok(())
 }
