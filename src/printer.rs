@@ -48,7 +48,7 @@ impl<'a> Printer<'a> {
         rhs_content,
       } => {
         self.print_file_header(lhs_path.as_deref(), rhs_path.as_deref())?;
-        self.print_diff(&lhs_content, &rhs_content)?;
+        self.print_diff(true, &lhs_content, &rhs_content)?;
       }
       FilePairEvent::Binary { lhs_path, rhs_path } => {
         self.print_binary_files_differ(
@@ -156,14 +156,21 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
-  pub fn print_diff(&mut self, lhs_all: &[u8], rhs_all: &[u8]) -> Result<()> {
+  pub fn print_diff(
+    &mut self,
+    include_headers: bool,
+    lhs_all: &[u8],
+    rhs_all: &[u8],
+  ) -> Result<()> {
     let lhs = split_lines(lhs_all);
     let rhs = split_lines(rhs_all);
     let diffs = diff(&lhs, &rhs);
     let hunks = Hunk::build(self.context, &diffs);
 
     for h in hunks {
-      self.print_hunk_header(&h)?;
+      if include_headers {
+        self.print_hunk_header(&h)?;
+      }
       self.print_hunk_body(&lhs, &rhs, &h.diffs)?;
     }
     Ok(())
@@ -287,25 +294,33 @@ impl<'a> Printer<'a> {
 
   fn print_cluster(&mut self, cluster: &DiffCluster) -> Result<()> {
     let total: usize = cluster.entries.values().sum();
-    let width = format!("{total}").len();
+    let entry_count =
+      |n| format!("{} {}", n, if 1 == n { "entry" } else { "entries" });
     writeln!(
       self.writer,
       "{}",
-      format!("=== {total:width$} total occurrences").style(self.styles.header),
+      format!("=== cluster contains {}", entry_count(total))
+        .style(self.styles.header),
     )?;
     for (entry, &count) in &cluster.entries {
       let lhs = self.display_name(entry.lhs_path.as_deref());
       let rhs = self.display_name(entry.rhs_path.as_deref());
-      write!(
+      write!(self.writer, "{}", "= ".style(self.styles.separator))?;
+      write!(self.writer, "{}", lhs.style(self.styles.old))?;
+      write!(self.writer, "{}", " => ".style(self.styles.separator))?;
+      write!(self.writer, "{}", rhs.style(self.styles.new))?;
+      writeln!(
         self.writer,
         "{}",
-        format!("=== {count:width$} in ").style(self.styles.separator)
+        format!(": {}", entry_count(count)).style(self.styles.separator)
       )?;
-      write!(self.writer, "{}", lhs.style(self.styles.old))?;
-      write!(self.writer, "{}", " -> ".style(self.styles.separator))?;
-      writeln!(self.writer, "{}", rhs.style(self.styles.new))?;
     }
-    self.print_diff(&cluster.exemplar_lhs, &cluster.exemplar_rhs)?;
+    writeln!(
+      self.writer,
+      "{}",
+      "=== example diff: ".style(self.styles.separator)
+    )?;
+    self.print_diff(false, &cluster.exemplar_lhs, &cluster.exemplar_rhs)?;
     Ok(())
   }
 }
