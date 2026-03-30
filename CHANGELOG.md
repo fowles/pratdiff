@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added "rediff"ing support (including support for diff clustering with
+  `--cluster`).  When a diff is piped to pratdiff, it will produced an token
+  based diff.
+
 ## [3.0.0] - 2026-03-25
 
 ### Added

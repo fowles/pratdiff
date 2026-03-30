@@ -14,6 +14,8 @@ use crate::cluster::DiffCluster;
 use crate::diff;
 use crate::files::FilePairEvent;
 use crate::hunks::Hunk;
+use crate::parse_diff::ParsedFileDiff;
+use crate::parse_diff::ParsedHunkItem;
 use crate::styles::Styles;
 use crate::tokenize_lines;
 use crate::tokens::split_lines;
@@ -202,21 +204,30 @@ impl<'a> Printer<'a> {
     for d in diffs {
       match &d {
         Mutation { lhs, rhs } => {
-          if rhs.is_empty() {
-            self.print_lines(&lhs_lines[lhs.clone()], "-", self.styles.old)?;
-          } else if lhs.is_empty() {
-            self.print_lines(&rhs_lines[rhs.clone()], "+", self.styles.new)?;
-          } else {
-            self.print_mutation(
-              &lhs_lines[lhs.clone()],
-              &rhs_lines[rhs.clone()],
-            )?;
-          }
+          self.print_mutation_block(
+            &lhs_lines[lhs.clone()],
+            &rhs_lines[rhs.clone()],
+          )?;
         }
         Match { lhs, .. } => {
           self.print_lines(&lhs_lines[lhs.clone()], " ", self.styles.both)?;
         }
       }
+    }
+    Ok(())
+  }
+
+  fn print_mutation_block(
+    &mut self,
+    old: &[&[u8]],
+    new: &[&[u8]],
+  ) -> Result<()> {
+    if new.is_empty() {
+      self.print_lines(old, "-", self.styles.old)?;
+    } else if old.is_empty() {
+      self.print_lines(new, "+", self.styles.new)?;
+    } else {
+      self.print_mutation(old, new)?;
     }
     Ok(())
   }
@@ -285,6 +296,55 @@ impl<'a> Printer<'a> {
     Ok(())
   }
 
+  /// Re-render a parsed file diff (from `parse_diff::parse`) with token-level
+  /// colorization. Hunk boundaries are preserved as-is from the input.
+  pub fn print_parsed_file_diff(
+    &mut self,
+    diff: &ParsedFileDiff,
+  ) -> Result<()> {
+    for line in &diff.preamble {
+      let s = String::from_utf8_lossy(line);
+      writeln!(self.writer, "{}", s.style(self.styles.header))?;
+    }
+    if let Some(old_path) = &diff.old_path {
+      writeln!(
+        self.writer,
+        "{} {}",
+        "---".style(self.styles.old),
+        old_path.display().style(self.styles.header),
+      )?;
+    }
+    if let Some(new_path) = &diff.new_path {
+      writeln!(
+        self.writer,
+        "{} {}",
+        "+++".style(self.styles.new),
+        new_path.display().style(self.styles.header),
+      )?;
+    }
+    for hunk in &diff.hunks {
+      if let Some(header) = &hunk.header {
+        let s = String::from_utf8_lossy(header);
+        writeln!(self.writer, "{}", s.style(self.styles.separator))?;
+      }
+      for item in &hunk.items {
+        match item {
+          ParsedHunkItem::Context(line) => {
+            self.print_lines(
+              std::slice::from_ref(line),
+              " ",
+              self.styles.both,
+            )?;
+          }
+          ParsedHunkItem::Mutation(m) => {
+            self.print_mutation_block(&m.old, &m.new)?;
+          }
+        }
+      }
+    }
+    Ok(())
+  }
+
   pub fn print_clusters(&mut self, clusters: &[DiffCluster]) -> Result<()> {
     for cluster in clusters {
       self.print_cluster(cluster)?;
@@ -322,5 +382,67 @@ impl<'a> Printer<'a> {
     )?;
     self.print_diff(false, &cluster.exemplar_lhs, &cluster.exemplar_rhs)?;
     Ok(())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::parse_diff;
+
+  fn printer_for(buf: &mut Vec<u8>) -> Printer<'_> {
+    Printer::default(buf, 3, PathBuf::new())
+  }
+
+  /// Strip ANSI escape codes from output for plain-text assertions.
+  fn plain(buf: Vec<u8>) -> String {
+    let stripped = anstream::adapter::strip_bytes(&buf).into_vec();
+    String::from_utf8(stripped).unwrap()
+  }
+
+  #[test]
+  fn render_unified_roundtrip() {
+    let input = b"\
+--- a/file.txt\n\
++++ b/file.txt\n\
+@@ -1,3 +1,3 @@\n\
+ context before\n\
+-old line\n\
++new line\n\
+ context after\n\
+";
+    let diffs = parse_diff::parse(input);
+    let mut buf = Vec::new();
+    printer_for(&mut buf)
+      .print_parsed_file_diff(&diffs[0])
+      .unwrap();
+    let out = plain(buf);
+    assert!(out.contains("@@ -1,3 +1,3 @@"), "hunk header should be preserved");
+    assert!(out.contains(" context before"), "context line with space prefix");
+    assert!(out.contains(" context after"), "context line with space prefix");
+    assert!(out.contains("-old line"), "old line with minus prefix");
+    assert!(out.contains("+new line"), "new line with plus prefix");
+  }
+
+  #[test]
+  fn render_traditional_hunk_header_translated() {
+    let input = b"\
+3c3\n\
+< old line\n\
+---\n\
+> new line\n\
+";
+    let diffs = parse_diff::parse(input);
+    let mut buf = Vec::new();
+    printer_for(&mut buf)
+      .print_parsed_file_diff(&diffs[0])
+      .unwrap();
+    let out = plain(buf);
+    assert!(
+      out.contains("@@ -3,1 +3,1 @@"),
+      "traditional 3c3 should be translated to unified header"
+    );
+    assert!(out.contains("-old line"));
+    assert!(out.contains("+new line"));
   }
 }

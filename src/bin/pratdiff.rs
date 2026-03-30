@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::Read;
 use std::path::PathBuf;
 
 use clap::ColorChoice;
@@ -16,14 +17,24 @@ use common_path::common_path;
     env!("VERGEN_BUILD_DATE"),
     ")"
 ))]
-#[command(about = "Diff files using patience algorithm")]
+#[command(about = "Diff files with token level colorization")]
+#[command(override_usage = r#"
+    pratdiff [OPTIONS] <OLD_FILE> <NEW_FILE>
+        Diff two files or directory trees.
+
+    <diff tool> | pratdiff [OPTIONS]
+        Rediff an existing diff, adding pratdiff goodness.
+
+        Examples:
+          git diff | pratdiff
+          diff -u old.txt new.txt | pratdiff --cluster"#)]
 struct Args {
   /// Path to old file, directory tree, or `-` for stdin.
-  #[clap(name = "OLD_FILE", required_unless_present = "shell")]
+  #[clap(name = "OLD_FILE")]
   lhs: Option<PathBuf>,
 
   /// Path to new file, directory tree, or `-` for stdin.
-  #[clap(name = "NEW_FILE", required_unless_present = "shell")]
+  #[clap(name = "NEW_FILE")]
   rhs: Option<PathBuf>,
 
   /// Display NUM lines of unchanged context before and after changes
@@ -60,23 +71,48 @@ fn main() -> Result<(), Box<dyn Error>> {
   }
   .write_global();
 
-  let lhs = args.lhs.unwrap();
-  let rhs = args.rhs.unwrap();
-  let common_prefix = if args.verbose_paths {
-    PathBuf::new()
-  } else {
-    common_path(&lhs, &rhs).unwrap_or_default()
-  };
-
   let mut stdout = anstream::stdout();
-  let mut p =
-    pratdiff::Printer::default(&mut stdout, args.context, common_prefix);
 
-  if args.cluster {
-    let clusters = pratdiff::cluster_files(&lhs, &rhs);
-    p.print_clusters(&clusters)?;
-  } else {
-    pratdiff::diff_files(&mut p, &lhs, &rhs)?;
+  match (args.lhs, args.rhs) {
+    (Some(lhs), Some(rhs)) => {
+      let common_prefix = if args.verbose_paths {
+        PathBuf::new()
+      } else {
+        common_path(&lhs, &rhs).unwrap_or_default()
+      };
+      let mut p =
+        pratdiff::Printer::default(&mut stdout, args.context, common_prefix);
+      if args.cluster {
+        let clusters = pratdiff::cluster_files(&lhs, &rhs);
+        p.print_clusters(&clusters)?;
+      } else {
+        pratdiff::diff_files(&mut p, &lhs, &rhs)?;
+      }
+    }
+    (Some(_), None) => {
+      Args::command()
+        .error(
+          clap::error::ErrorKind::MissingRequiredArgument,
+          "NEW_FILE is required when OLD_FILE is supplied",
+        )
+        .exit();
+    }
+    (None, _) => {
+      // Re-diff mode: read diff from stdin and re-render.
+      let mut input = Vec::new();
+      std::io::stdin().read_to_end(&mut input)?;
+      let input = anstream::adapter::strip_bytes(&input).into_vec();
+
+      let mut p =
+        pratdiff::Printer::default(&mut stdout, args.context, PathBuf::new());
+      if args.cluster {
+        let diffs = pratdiff::parse_diff::parse(&input);
+        let clusters = pratdiff::rediff_cluster(&diffs);
+        p.print_clusters(&clusters)?;
+      } else {
+        pratdiff::rediff(&mut p, &input)?;
+      }
+    }
   }
   Ok(())
 }

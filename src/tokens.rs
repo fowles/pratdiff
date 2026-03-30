@@ -36,6 +36,16 @@ pub fn split_lines(content: &[u8]) -> Vec<&[u8]> {
   lines
 }
 
+pub fn lines_to_bytes<T: AsRef<[u8]>>(lines: &[T]) -> Vec<u8> {
+  let mut out =
+    Vec::with_capacity(lines.iter().map(|l| l.as_ref().len() + 1).sum());
+  for l in lines {
+    out.extend_from_slice(l.as_ref());
+    out.push(b'\n');
+  }
+  out
+}
+
 pub fn is_whitespace_token(token: &[u8]) -> bool {
   !token.is_empty() && token.iter().all(|b| (*b as char).is_ascii_whitespace())
 }

@@ -8,6 +8,7 @@ use crate::diff::DiffItem;
 use crate::diff::diff;
 use crate::files::FilePairEvent;
 use crate::tokens::is_whitespace_token;
+use crate::tokens::lines_to_bytes;
 use crate::tokens::split_lines;
 use crate::tokens::tokenize_lines;
 
@@ -114,15 +115,6 @@ impl DiffCluster {
     });
     clusters
   }
-}
-
-fn lines_to_bytes(lines: &[&[u8]]) -> Vec<u8> {
-  if lines.is_empty() {
-    return vec![];
-  }
-  let mut out = lines.join(b"\n".as_ref());
-  out.push(b'\n');
-  out
 }
 
 #[cfg(test)]
