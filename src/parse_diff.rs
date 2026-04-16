@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use crate::tokens::split_lines;
+
 /// Preamble lines (git `diff --git`, `index`, etc.) plus `---`/`+++` headers
 /// and the hunks that follow, for one file in the input diff.
 #[derive(Debug, Default, PartialEq)]
@@ -41,8 +43,7 @@ pub type ParsedDiff<'a> = Vec<ParsedFileDiff<'a>>;
 /// Parse a diff from pre-ANSI-stripped bytes, returning a structure that
 /// borrows slices directly from `input`.
 pub fn parse(input: &[u8]) -> ParsedDiff<'_> {
-  let lines = crate::tokens::split_lines(input);
-  Parser::new().run(&lines)
+  Parser::new().run(&split_lines(input))
 }
 
 // ---------------------------------------------------------------------------
@@ -178,16 +179,15 @@ impl<'a> Parser<'a> {
   }
 
   fn push_current_hunk(&mut self) {
-    if let Some(hunk) = self.current_hunk.take() {
-      if !hunk.items.is_empty() || hunk.header.is_some() {
-        self.current_file.hunks.push(hunk);
-      }
+    if let Some(hunk) = self.current_hunk.take()
+      && (!hunk.items.is_empty() || hunk.header.is_some())
+    {
+      self.current_file.hunks.push(hunk);
     }
   }
 
   fn push_current_file(&mut self) {
-    let file =
-      std::mem::replace(&mut self.current_file, ParsedFileDiff::default());
+    let file = std::mem::take(&mut self.current_file);
     if !file.preamble.is_empty()
       || file.old_path.is_some()
       || file.new_path.is_some()

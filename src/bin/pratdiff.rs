@@ -52,6 +52,10 @@ struct Args {
   #[clap(long)]
   cluster: bool,
 
+  /// How to treat whitespace while diffing
+  #[clap(long, value_enum, default_value_t = pratdiff::IgnoreWhitespace::LengthChanges)]
+  ignore_whitespace: pratdiff::IgnoreWhitespace,
+
   /// The shell to generate the completions for
   #[arg(long = "completions", value_name = "SHELL", value_enum)]
   shell: Option<Shell>,
@@ -80,10 +84,15 @@ fn main() -> Result<(), Box<dyn Error>> {
       } else {
         common_path(&lhs, &rhs).unwrap_or_default()
       };
-      let mut p =
-        pratdiff::Printer::default(&mut stdout, args.context, common_prefix);
+      let mut p = pratdiff::Printer::new(
+        &mut stdout,
+        args.context,
+        common_prefix,
+        args.ignore_whitespace,
+      );
       if args.cluster {
-        let clusters = pratdiff::cluster_files(&lhs, &rhs);
+        let clusters =
+          pratdiff::cluster_files(&lhs, &rhs, args.ignore_whitespace);
         p.print_clusters(&clusters)?;
       } else {
         pratdiff::diff_files(&mut p, &lhs, &rhs)?;
@@ -103,11 +112,15 @@ fn main() -> Result<(), Box<dyn Error>> {
       std::io::stdin().read_to_end(&mut input)?;
       let input = anstream::adapter::strip_bytes(&input).into_vec();
 
-      let mut p =
-        pratdiff::Printer::default(&mut stdout, args.context, PathBuf::new());
+      let mut p = pratdiff::Printer::new(
+        &mut stdout,
+        args.context,
+        PathBuf::new(),
+        args.ignore_whitespace,
+      );
       if args.cluster {
         let diffs = pratdiff::parse_diff::parse(&input);
-        let clusters = pratdiff::rediff_cluster(&diffs);
+        let clusters = pratdiff::rediff_cluster(&diffs, args.ignore_whitespace);
         p.print_clusters(&clusters)?;
       } else {
         pratdiff::rediff(&mut p, &input)?;

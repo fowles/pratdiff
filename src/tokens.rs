@@ -1,4 +1,7 @@
+use itertools::Itertools;
 use unicode_segmentation::UnicodeSegmentation;
+
+use crate::IgnoreWhitespace;
 
 /// Split `content` into lines, stripping line endings (`\r\n`, `\n`, `\r`).
 pub fn split_lines(content: &[u8]) -> Vec<&[u8]> {
@@ -57,6 +60,83 @@ pub fn tokenize_lines<'a>(lines: &[&'a [u8]]) -> Vec<&'a [u8]> {
     .collect();
   v.pop();
   v
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct NormalizedBytes<'a> {
+  pub bytes: &'a [u8],
+  pub mode: IgnoreWhitespace,
+}
+
+impl<'a> NormalizedBytes<'a> {
+  pub fn new(bytes: &'a [u8], mode: IgnoreWhitespace) -> Self {
+    NormalizedBytes { bytes, mode }
+  }
+}
+
+impl<'a> PartialEq for NormalizedBytes<'a> {
+  fn eq(&self, other: &Self) -> bool {
+    if self.mode != other.mode {
+      return self.bytes == other.bytes;
+    }
+
+    match self.mode {
+      IgnoreWhitespace::No => self.bytes == other.bytes,
+      IgnoreWhitespace::LengthChanges => {
+        let it1 = ByteTokenIter::new(self.bytes);
+        let it2 = ByteTokenIter::new(other.bytes);
+        it1.zip_longest(it2).all(|pair| match pair {
+          itertools::EitherOrBoth::Both(t1, t2) => {
+            if is_whitespace_token(t1) && is_whitespace_token(t2) {
+              true
+            } else {
+              t1 == t2
+            }
+          }
+          _ => false,
+        })
+      }
+      IgnoreWhitespace::All => {
+        let it1 = self
+          .bytes
+          .iter()
+          .filter(|&&b| !(b as char).is_ascii_whitespace());
+        let it2 = other
+          .bytes
+          .iter()
+          .filter(|&&b| !(b as char).is_ascii_whitespace());
+        it1.eq(it2)
+      }
+    }
+  }
+}
+
+impl<'a> Eq for NormalizedBytes<'a> {}
+
+impl<'a> std::hash::Hash for NormalizedBytes<'a> {
+  fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    match self.mode {
+      IgnoreWhitespace::No => self.bytes.hash(state),
+      IgnoreWhitespace::LengthChanges => {
+        for t in ByteTokenIter::new(self.bytes) {
+          if is_whitespace_token(t) {
+            state.write(b" ");
+          } else {
+            state.write(t);
+          }
+        }
+      }
+      IgnoreWhitespace::All => {
+        for &b in self
+          .bytes
+          .iter()
+          .filter(|&&b| !(b as char).is_ascii_whitespace())
+        {
+          state.write_u8(b);
+        }
+      }
+    }
+  }
 }
 
 struct ByteTokenIter<'a> {
@@ -201,5 +281,44 @@ mod tests {
         b"1"
       ],
     );
+  }
+
+  use std::collections::hash_map::DefaultHasher;
+  use std::hash::Hash;
+  use std::hash::Hasher;
+
+  fn hash<T: Hash>(t: &T) -> u64 {
+    let mut s = DefaultHasher::new();
+    t.hash(&mut s);
+    s.finish()
+  }
+
+  #[test]
+  fn normalized_bytes_no() {
+    let b1 = NormalizedBytes::new(b"foo  bar", IgnoreWhitespace::No);
+    let b2 = NormalizedBytes::new(b"foo bar", IgnoreWhitespace::No);
+    assert_ne!(b1, b2);
+    assert_ne!(hash(&b1), hash(&b2));
+  }
+
+  #[test]
+  fn normalized_bytes_length_changes() {
+    let b1 = NormalizedBytes::new(b"foo  bar", IgnoreWhitespace::LengthChanges);
+    let b2 = NormalizedBytes::new(b"foo bar", IgnoreWhitespace::LengthChanges);
+    let b3 = NormalizedBytes::new(b"foobar", IgnoreWhitespace::LengthChanges);
+    assert_eq!(b1, b2);
+    assert_eq!(hash(&b1), hash(&b2));
+    assert_ne!(b1, b3);
+  }
+
+  #[test]
+  fn normalized_bytes_all() {
+    let b1 = NormalizedBytes::new(b"foo  bar", IgnoreWhitespace::All);
+    let b2 = NormalizedBytes::new(b"foobar", IgnoreWhitespace::All);
+    let b3 = NormalizedBytes::new(b"foo bar ", IgnoreWhitespace::All);
+    assert_eq!(b1, b2);
+    assert_eq!(hash(&b1), hash(&b2));
+    assert_eq!(b1, b3);
+    assert_eq!(hash(&b1), hash(&b3));
   }
 }

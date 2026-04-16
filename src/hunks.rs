@@ -73,13 +73,14 @@ impl Hunk {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use crate::IgnoreWhitespace;
   use crate::diff::diff;
   use crate::tokens::split_lines;
 
   fn diff_lines(lhs: &[u8], rhs: &[u8]) -> Vec<DiffItem> {
     let lhs_lines: Vec<_> = split_lines(lhs);
     let rhs_lines: Vec<_> = split_lines(rhs);
-    diff(&lhs_lines, &rhs_lines)
+    diff(&lhs_lines, &rhs_lines, IgnoreWhitespace::No)
   }
 
   fn hunk_positions(hunks: &[Hunk]) -> Vec<((usize, usize), (usize, usize))> {

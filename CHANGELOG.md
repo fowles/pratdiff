@@ -8,6 +8,10 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- Added `--ignore-whitespace` to control whitespace handling during diffing.
+
 ### Changes
 
 - Update dependencies

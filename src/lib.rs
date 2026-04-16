@@ -9,6 +9,14 @@ mod tokens;
 
 use std::path::Path;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, clap::ValueEnum)]
+pub enum IgnoreWhitespace {
+  #[default]
+  LengthChanges,
+  All,
+  No,
+}
+
 pub use cluster::ClusterEntry;
 pub use cluster::DiffCluster;
 pub use cluster::DiffSignature;
@@ -22,8 +30,12 @@ pub use tokens::tokenize_lines;
 
 use crate::tokens::lines_to_bytes;
 
-pub fn cluster_files(lhs: &Path, rhs: &Path) -> Vec<DiffCluster> {
-  DiffCluster::cluster(walk_file_pairs(lhs, rhs))
+pub fn cluster_files(
+  lhs: &Path,
+  rhs: &Path,
+  mode: IgnoreWhitespace,
+) -> Vec<DiffCluster> {
+  DiffCluster::cluster(walk_file_pairs(lhs, rhs), mode)
 }
 
 pub fn diff_files(
@@ -52,6 +64,7 @@ pub fn rediff(
 /// Cluster mutations extracted from a parsed diff by change signature.
 pub fn rediff_cluster(
   diffs: &[parse_diff::ParsedFileDiff],
+  mode: IgnoreWhitespace,
 ) -> Vec<DiffCluster> {
   let events = diffs.iter().flat_map(|fd| {
     fd.hunks.iter().flat_map(move |hunk| {
@@ -69,7 +82,7 @@ pub fn rediff_cluster(
       })
     })
   });
-  DiffCluster::cluster(events)
+  DiffCluster::cluster(events, mode)
 }
 
 #[cfg(test)]
@@ -92,7 +105,7 @@ mod tests {
 +bar\n\
 ";
     let diffs = parse_diff::parse(input);
-    let clusters = rediff_cluster(&diffs);
+    let clusters = rediff_cluster(&diffs, IgnoreWhitespace::No);
     assert_eq!(clusters.len(), 1);
     let total: usize = clusters[0].entries.values().sum();
     assert_eq!(total, 2);
@@ -113,7 +126,7 @@ mod tests {
 +world\n\
 ";
     let diffs = parse_diff::parse(input);
-    let clusters = rediff_cluster(&diffs);
+    let clusters = rediff_cluster(&diffs, IgnoreWhitespace::No);
     assert_eq!(clusters.len(), 2);
   }
 }

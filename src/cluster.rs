@@ -1,13 +1,15 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::PathBuf;
 
+use crate::IgnoreWhitespace;
 use crate::diff::DiffItem;
 use crate::diff::diff;
 use crate::files::FilePairEvent;
-use crate::tokens::is_whitespace_token;
+use crate::tokens::NormalizedBytes;
 use crate::tokens::lines_to_bytes;
 use crate::tokens::split_lines;
 use crate::tokens::tokenize_lines;
@@ -20,10 +22,14 @@ pub struct DiffSignature {
 }
 
 impl DiffSignature {
-  pub fn new(lhs_lines: &[&[u8]], rhs_lines: &[&[u8]]) -> DiffSignature {
+  pub fn new(
+    lhs_lines: &[&[u8]],
+    rhs_lines: &[&[u8]],
+    mode: IgnoreWhitespace,
+  ) -> DiffSignature {
     let lhs_tokens = tokenize_lines(lhs_lines);
     let rhs_tokens = tokenize_lines(rhs_lines);
-    let token_diffs = diff(&lhs_tokens, &rhs_tokens);
+    let token_diffs = diff(&lhs_tokens, &rhs_tokens, mode);
 
     let mut lhs_hasher = DefaultHasher::new();
     let mut rhs_hasher = DefaultHasher::new();
@@ -31,12 +37,10 @@ impl DiffSignature {
     for item in &token_diffs {
       if let DiffItem::Mutation { lhs: tl, rhs: tr } = item {
         for &tok in &lhs_tokens[tl.clone()] {
-          let canonical = if is_whitespace_token(tok) { b" " } else { tok };
-          lhs_hasher.write(canonical);
+          NormalizedBytes::new(tok, mode).hash(&mut lhs_hasher);
         }
         for &tok in &rhs_tokens[tr.clone()] {
-          let canonical = if is_whitespace_token(tok) { b" " } else { tok };
-          rhs_hasher.write(canonical);
+          NormalizedBytes::new(tok, mode).hash(&mut rhs_hasher);
         }
       }
     }
@@ -68,6 +72,7 @@ impl DiffCluster {
   /// Group files into clusters of mutations, sorted by cluster size.
   pub fn cluster(
     events: impl Iterator<Item = FilePairEvent>,
+    mode: IgnoreWhitespace,
   ) -> Vec<DiffCluster> {
     let mut map: HashMap<DiffSignature, DiffCluster> = HashMap::new();
 
@@ -81,13 +86,13 @@ impl DiffCluster {
       {
         let lhs_lines = split_lines(&lhs_content);
         let rhs_lines = split_lines(&rhs_content);
-        let line_diffs = diff(&lhs_lines, &rhs_lines);
+        let line_diffs = diff(&lhs_lines, &rhs_lines, mode);
 
         for item in &line_diffs {
           if let DiffItem::Mutation { lhs, rhs } = item {
             let lhs = &lhs_lines[lhs.clone()];
             let rhs = &rhs_lines[rhs.clone()];
-            let sig = DiffSignature::new(lhs, rhs);
+            let sig = DiffSignature::new(lhs, rhs, mode);
             let cluster =
               map.entry(sig.clone()).or_insert_with(|| DiffCluster {
                 signature: sig,
@@ -121,10 +126,10 @@ impl DiffCluster {
 mod tests {
   use super::*;
 
-  fn sig(lhs: &[u8], rhs: &[u8]) -> DiffSignature {
+  fn sig(lhs: &[u8], rhs: &[u8], mode: IgnoreWhitespace) -> DiffSignature {
     let lhs_lines = split_lines(lhs);
     let rhs_lines = split_lines(rhs);
-    DiffSignature::new(&lhs_lines, &rhs_lines)
+    DiffSignature::new(&lhs_lines, &rhs_lines, mode)
   }
 
   fn sizes(clusters: &[DiffCluster]) -> Vec<usize> {
@@ -133,17 +138,26 @@ mod tests {
 
   #[test]
   fn signature_whitespace_normalization() {
-    assert_eq!(sig(b"x = 1\n", b"x  =  1\n"), sig(b"a = b\n", b"a  =  b\n"));
+    assert_eq!(
+      sig(b"x = 1\n", b"x  =  1\n", IgnoreWhitespace::LengthChanges),
+      sig(b"a = b\n", b"a  =  b\n", IgnoreWhitespace::LengthChanges)
+    );
   }
 
   #[test]
   fn signature_different_changes() {
-    assert_ne!(sig(b"foo\n", b"bar\n"), sig(b"foo\n", b"baz\n"));
+    assert_ne!(
+      sig(b"foo\n", b"bar\n", IgnoreWhitespace::No),
+      sig(b"foo\n", b"baz\n", IgnoreWhitespace::No)
+    );
   }
 
   #[test]
   fn signature_identical_content() {
-    assert_eq!(sig(b"hello\n", b"hello\n"), sig(b"world\n", b"world\n"));
+    assert_eq!(
+      sig(b"hello\n", b"hello\n", IgnoreWhitespace::No),
+      sig(b"world\n", b"world\n", IgnoreWhitespace::No)
+    );
   }
 
   #[test]
@@ -169,7 +183,8 @@ mod tests {
       },
     ];
 
-    let clusters = DiffCluster::cluster(events.into_iter());
+    let clusters =
+      DiffCluster::cluster(events.into_iter(), IgnoreWhitespace::No);
     assert_eq!(sizes(&clusters), [2, 1]);
   }
 
@@ -184,7 +199,8 @@ mod tests {
       rhs_content: b"bar\nkeep\nbar\n".to_vec(),
     }];
 
-    let clusters = DiffCluster::cluster(events.into_iter());
+    let clusters =
+      DiffCluster::cluster(events.into_iter(), IgnoreWhitespace::No);
     assert_eq!(sizes(&clusters), [2]);
   }
 }

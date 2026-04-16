@@ -2,6 +2,9 @@ use std::collections::HashMap;
 use std::iter::zip;
 use std::ops::Range;
 
+use crate::IgnoreWhitespace;
+use crate::tokens::NormalizedBytes;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Side {
   Lhs,
@@ -39,12 +42,17 @@ impl DiffItem {
   }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-struct Diffs {
-  vec: Vec<DiffItem>,
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Diffs {
+  pub vec: Vec<DiffItem>,
+  pub mode: IgnoreWhitespace,
 }
 
 impl Diffs {
+  fn new(mode: IgnoreWhitespace) -> Self {
+    Diffs { vec: vec![], mode }
+  }
+
   fn add_match(&mut self, len: usize) {
     if len == 0 {
       return;
@@ -106,21 +114,28 @@ impl Diffs {
 //    common subsequence on those lines, matching them up.
 // 4. Do steps 1-2 on each section between matched lines.
 
-pub fn diff(lhs: &[&[u8]], rhs: &[&[u8]]) -> Vec<DiffItem> {
-  let mut d = Diffs::default();
+pub fn diff(
+  lhs: &[&[u8]],
+  rhs: &[&[u8]],
+  mode: IgnoreWhitespace,
+) -> Vec<DiffItem> {
+  let mut d = Diffs::new(mode);
   accumulate_partitions(&mut d, lhs, rhs);
   d.vec
 }
 
 fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&[u8]], rhs: &[&[u8]]) {
-  let leading = leading_match_len(lhs, rhs);
+  let leading = leading_match_len(lhs, rhs, diffs.mode);
   diffs.add_match(leading);
   if leading == lhs.len() && leading == rhs.len() {
     return;
   }
 
-  let trailing =
-    trailing_match_len(&lhs[leading..lhs.len()], &rhs[leading..rhs.len()]);
+  let trailing = trailing_match_len(
+    &lhs[leading..lhs.len()],
+    &rhs[leading..rhs.len()],
+    diffs.mode,
+  );
   accumulate_partitions(
     diffs,
     &lhs[leading..lhs.len() - trailing],
@@ -129,18 +144,32 @@ fn accumulate_diffs(diffs: &mut Diffs, lhs: &[&[u8]], rhs: &[&[u8]]) {
   diffs.add_match(trailing);
 }
 
-fn leading_match_len(lhs: &[&[u8]], rhs: &[&[u8]]) -> usize {
-  zip(lhs, rhs).take_while(|(l, r)| l == r).count()
+fn leading_match_len(
+  lhs: &[&[u8]],
+  rhs: &[&[u8]],
+  mode: IgnoreWhitespace,
+) -> usize {
+  zip(lhs, rhs)
+    .take_while(|(l, r)| {
+      NormalizedBytes::new(l, mode) == NormalizedBytes::new(r, mode)
+    })
+    .count()
 }
 
-fn trailing_match_len(lhs: &[&[u8]], rhs: &[&[u8]]) -> usize {
+fn trailing_match_len(
+  lhs: &[&[u8]],
+  rhs: &[&[u8]],
+  mode: IgnoreWhitespace,
+) -> usize {
   zip(lhs.iter().rev(), rhs.iter().rev())
-    .take_while(|(l, r)| l == r)
+    .take_while(|(l, r)| {
+      NormalizedBytes::new(l, mode) == NormalizedBytes::new(r, mode)
+    })
     .count()
 }
 
 fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&[u8]], rhs: &[&[u8]]) {
-  let matched = match_lines(lhs, rhs);
+  let matched = match_lines(lhs, rhs, diffs.mode);
   if matched.is_empty() {
     diffs.add_mutation(lhs.len(), rhs.len());
     return;
@@ -158,13 +187,24 @@ fn accumulate_partitions(diffs: &mut Diffs, lhs: &[&[u8]], rhs: &[&[u8]]) {
   accumulate_diffs(diffs, &lhs[lhs_pos..lhs.len()], &rhs[rhs_pos..rhs.len()]);
 }
 
-fn match_lines(lhs: &[&[u8]], rhs: &[&[u8]]) -> Vec<(usize, usize)> {
-  let mut m: HashMap<&[u8], (Vec<usize>, Vec<usize>)> = HashMap::new();
+fn match_lines(
+  lhs: &[&[u8]],
+  rhs: &[&[u8]],
+  mode: IgnoreWhitespace,
+) -> Vec<(usize, usize)> {
+  let mut m: HashMap<NormalizedBytes, (Vec<usize>, Vec<usize>)> =
+    HashMap::new();
   for (i, l) in lhs.iter().enumerate() {
-    m.entry(l).or_default().0.push(i);
+    m.entry(NormalizedBytes::new(l, mode))
+      .or_default()
+      .0
+      .push(i);
   }
   for (i, r) in rhs.iter().enumerate() {
-    m.entry(r).or_default().1.push(i);
+    m.entry(NormalizedBytes::new(r, mode))
+      .or_default()
+      .1
+      .push(i);
   }
 
   let mut min = usize::MAX;
@@ -224,21 +264,25 @@ mod tests {
   use super::*;
   use crate::tokens::split_lines;
 
-  fn diff_lines(lhs: &[u8], rhs: &[u8]) -> Vec<DiffItem> {
+  fn diff_lines(
+    lhs: &[u8],
+    rhs: &[u8],
+    mode: IgnoreWhitespace,
+  ) -> Vec<DiffItem> {
     let lhs_lines: Vec<_> = split_lines(lhs);
     let rhs_lines: Vec<_> = split_lines(rhs);
-    diff(&lhs_lines, &rhs_lines)
+    diff(&lhs_lines, &rhs_lines, mode)
   }
 
   #[test]
   fn diff_empty() {
-    assert_eq!(diff(&[] as &[&[u8]], &[]), &[]);
+    assert_eq!(diff(&[] as &[&[u8]], &[], IgnoreWhitespace::No), &[]);
   }
 
   #[test]
   fn diff_eq() {
     assert_eq!(
-      diff(&[b"a", b"b", b"c"], &[b"a", b"b", b"c"]),
+      diff(&[b"a", b"b", b"c"], &[b"a", b"b", b"c"], IgnoreWhitespace::No),
       &[Match {
         lhs: Range { start: 0, end: 3 },
         rhs: Range { start: 0, end: 3 },
@@ -249,7 +293,7 @@ mod tests {
   #[test]
   fn diff_ne() {
     assert_eq!(
-      diff(&[b"a", b"b", b"c"], &[b"a", b"c"]),
+      diff(&[b"a", b"b", b"c"], &[b"a", b"c"], IgnoreWhitespace::No),
       &[
         Match {
           lhs: Range { start: 0, end: 1 },
@@ -266,7 +310,7 @@ mod tests {
       ]
     );
     assert_eq!(
-      diff(&[b"z", b"a", b"b", b"c"], &[b"a", b"c"]),
+      diff(&[b"z", b"a", b"b", b"c"], &[b"a", b"c"], IgnoreWhitespace::No),
       &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
@@ -287,7 +331,11 @@ mod tests {
       ]
     );
     assert_eq!(
-      diff(&[b"z", b"a", b"e", b"b", b"c"], &[b"a", b"e", b"c"]),
+      diff(
+        &[b"z", b"a", b"e", b"b", b"c"],
+        &[b"a", b"e", b"c"],
+        IgnoreWhitespace::No
+      ),
       &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
@@ -312,7 +360,7 @@ mod tests {
   #[test]
   fn diff_only_non_unique() {
     assert_eq!(
-      diff(&[b"a", b"b", b"b", b"c"], &[b"b", b"b"]),
+      diff(&[b"a", b"b", b"b", b"c"], &[b"b", b"b"], IgnoreWhitespace::No),
       &[
         Mutation {
           lhs: Range { start: 0, end: 1 },
@@ -335,7 +383,8 @@ mod tests {
     assert_eq!(
       match_lines(
         &[b"a", b"b", b"c", b"d", b"e", b"d"],
-        &[b"a", b"c", b"d", b"e"]
+        &[b"a", b"c", b"d", b"e"],
+        IgnoreWhitespace::No
       ),
       vec![(0, 0), (2, 1), (4, 3)],
     );
@@ -344,7 +393,11 @@ mod tests {
   #[test]
   fn match_lines_arity2() {
     assert_eq!(
-      match_lines(&[b"a", b"b", b"b", b"c"], &[b"b", b"b"]),
+      match_lines(
+        &[b"a", b"b", b"b", b"c"],
+        &[b"b", b"b"],
+        IgnoreWhitespace::No
+      ),
       vec![(1, 0), (2, 1)],
     );
   }
@@ -375,7 +428,11 @@ mod tests {
   #[test]
   fn lead_trail_overlap() {
     assert_eq!(
-      diff(&[b"a", b"b", b"d", b"b", b"c"], &[b"a", b"b", b"c"]),
+      diff(
+        &[b"a", b"b", b"d", b"b", b"c"],
+        &[b"a", b"b", b"c"],
+        IgnoreWhitespace::No
+      ),
       &[
         Match {
           lhs: Range { start: 0, end: 2 },
@@ -399,6 +456,7 @@ mod tests {
       diff_lines(
         include_bytes!("testdata/old/move.txt"),
         include_bytes!("testdata/new/move.txt"),
+        IgnoreWhitespace::No,
       ),
       &[
         Mutation {
@@ -415,5 +473,37 @@ mod tests {
         },
       ]
     );
+  }
+
+  #[test]
+  fn diff_ignore_whitespace_all() {
+    let lhs = b"foo bar\n";
+    let rhs = b"foobar\n";
+    // With No, they should be a mutation.
+    assert!(matches!(
+      diff_lines(lhs, rhs, IgnoreWhitespace::No)[0],
+      Mutation { .. }
+    ));
+    // With All, they should be a match.
+    assert!(matches!(
+      diff_lines(lhs, rhs, IgnoreWhitespace::All)[0],
+      Match { .. }
+    ));
+  }
+
+  #[test]
+  fn diff_ignore_whitespace_length_changes() {
+    let lhs = b"foo  bar\n";
+    let rhs = b"foo bar\n";
+    // With No, they should be a mutation.
+    assert!(matches!(
+      diff_lines(lhs, rhs, IgnoreWhitespace::No)[0],
+      Mutation { .. }
+    ));
+    // With LengthChanges, they should be a match.
+    assert!(matches!(
+      diff_lines(lhs, rhs, IgnoreWhitespace::LengthChanges)[0],
+      Match { .. }
+    ));
   }
 }

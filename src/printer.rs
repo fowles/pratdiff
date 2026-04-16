@@ -10,6 +10,7 @@ use diff::Side;
 use owo_colors::OwoColorize;
 use owo_colors::Style;
 
+use crate::IgnoreWhitespace;
 use crate::cluster::DiffCluster;
 use crate::diff;
 use crate::files::FilePairEvent;
@@ -25,6 +26,7 @@ pub struct Printer<'a> {
   writer: &'a mut dyn Write,
   context: usize,
   common_prefix: PathBuf,
+  pub ignore_whitespace: IgnoreWhitespace,
 }
 
 impl<'a> Printer<'a> {
@@ -38,6 +40,22 @@ impl<'a> Printer<'a> {
       writer,
       context,
       common_prefix,
+      ignore_whitespace: IgnoreWhitespace::default(),
+    }
+  }
+
+  pub fn new(
+    writer: &'a mut dyn Write,
+    context: usize,
+    common_prefix: PathBuf,
+    ignore_whitespace: IgnoreWhitespace,
+  ) -> Printer<'a> {
+    Printer {
+      styles: Styles::simple(),
+      writer,
+      context,
+      common_prefix,
+      ignore_whitespace,
     }
   }
 
@@ -166,7 +184,7 @@ impl<'a> Printer<'a> {
   ) -> Result<()> {
     let lhs = split_lines(lhs_all);
     let rhs = split_lines(rhs_all);
-    let diffs = diff(&lhs, &rhs);
+    let diffs = diff(&lhs, &rhs, self.ignore_whitespace);
     let hunks = Hunk::build(self.context, &diffs);
 
     for h in hunks {
@@ -252,7 +270,7 @@ impl<'a> Printer<'a> {
   ) -> Result<()> {
     let lhs_tokens = tokenize_lines(lhs_lines);
     let rhs_tokens = tokenize_lines(rhs_lines);
-    let diffs = diff(&lhs_tokens, &rhs_tokens);
+    let diffs = diff(&lhs_tokens, &rhs_tokens, self.ignore_whitespace);
     self.print_mutation_side(
       &lhs_tokens,
       &diffs,
@@ -391,7 +409,7 @@ mod tests {
   use crate::parse_diff;
 
   fn printer_for(buf: &mut Vec<u8>) -> Printer<'_> {
-    Printer::default(buf, 3, PathBuf::new())
+    Printer::new(buf, 3, PathBuf::new(), IgnoreWhitespace::No)
   }
 
   /// Strip ANSI escape codes from output for plain-text assertions.
