@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-04-16
+
 ### Added
 
 - Added `--ignore-whitespace` to control whitespace handling during diffing.
@@ -146,4 +148,5 @@ Initial release.
 [3.0.0]: https://github.com/fowles/pratdiff/compare/2.0.0...3.0.0
 [3.1.0]: https://github.com/fowles/pratdiff/compare/3.0.0...3.1.0
 [3.1.1]: https://github.com/fowles/pratdiff/compare/3.1.0...3.1.1
-[unreleased]: https://github.com/fowles/pratdiff/compare/3.1.1...main
+[Unreleased]: https://github.com/fowles/pratdiff/compare/4.0.0...main
+[4.0.0]: https://github.com/fowles/pratdiff/compare/3.1.1...4.0.0

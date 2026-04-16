@@ -15,7 +15,7 @@ and
 ❯ pratdiff --help
 Diff files with token level colorization
 
-Usage:
+Usage: 
     pratdiff [OPTIONS] <OLD_FILE> <NEW_FILE>
         Diff two files or directory trees.
 
@@ -31,13 +31,22 @@ Arguments:
   [NEW_FILE]  Path to new file, directory tree, or `-` for stdin
 
 Options:
-  -c, --context <NUM>        Display NUM lines of unchanged context before and after changes [default: 3]
-  -v, --verbose-paths        Print full paths instead of stripping a common prefix
-      --color <COLOR>        [default: auto] [possible values: auto, always, never]
-      --cluster              Group diffs into clusters by change signature
-      --completions <SHELL>  The shell to generate the completions for [possible values: bash, elvish, fish, nushell, powershell, zsh]
-  -h, --help                 Print help
-  -V, --version              Print version
+  -c, --context <NUM>
+          Display NUM lines of unchanged context before and after changes [default: 3]
+  -v, --verbose-paths
+          Print full paths instead of stripping a common prefix
+      --color <COLOR>
+          [default: auto] [possible values: auto, always, never]
+      --cluster
+          Group diffs into clusters by change signature
+      --ignore-whitespace <IGNORE_WHITESPACE>
+          How to treat whitespace while diffing [default: length-changes] [possible values: length-changes, all, no]
+      --completions <SHELL>
+          The shell to generate the completions for [possible values: bash, elvish, fish, nushell, powershell, zsh]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 # FAQ
