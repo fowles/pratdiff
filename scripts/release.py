@@ -6,9 +6,10 @@ import re
 import subprocess
 from datetime import date
 
-def run(cmd, capture=True):
+def run(cmd, capture=True, env = {}):
     print(f"+ {cmd}")
-    result = subprocess.run(cmd, shell=True, capture_output=capture, text=True)
+    result = subprocess.run(cmd, shell=True, capture_output=capture, text=True,
+                            env=os.environ | env)
     if result.returncode != 0:
         print(f"Command failed with exit code {result.returncode}")
         if capture:
@@ -64,7 +65,7 @@ def update_changelog(version):
         f.writelines(new_lines)
 
 def update_readme():
-    help_output = run("cargo run --quiet -- --help")
+    help_output = run("cargo run --quiet -- --help", env = {"COLUMNS": "80"})
     
     with open("README.md", "r") as f:
         content = f.read()
