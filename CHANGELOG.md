@@ -8,6 +8,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [5.0.1] - 2026-07-02
+
 ### Fixed
 
 - Fix `cargo install` issue introduced by `vergen` version bump
@@ -163,6 +165,7 @@ Initial release.
 [3.0.0]: https://github.com/fowles/pratdiff/compare/2.0.0...3.0.0
 [3.1.0]: https://github.com/fowles/pratdiff/compare/3.0.0...3.1.0
 [3.1.1]: https://github.com/fowles/pratdiff/compare/3.1.0...3.1.1
-[Unreleased]: https://github.com/fowles/pratdiff/compare/5.0.0...main
+[Unreleased]: https://github.com/fowles/pratdiff/compare/5.0.1...main
+[5.0.1]: https://github.com/fowles/pratdiff/compare/5.0.0...5.0.1
 [5.0.0]: https://github.com/fowles/pratdiff/compare/4.0.0...5.0.0
 [4.0.0]: https://github.com/fowles/pratdiff/compare/3.1.1...4.0.0
