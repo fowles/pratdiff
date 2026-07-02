@@ -10,6 +10,11 @@ and this project adheres to
 
 ## [5.0.0] - 2026-07-02
 
+### Changes
+
+- Update dependencies
+- Switch to using `std::range::Range` in the library
+
 ## [4.0.0] - 2026-04-16
 
 ### Added
