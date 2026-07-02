@@ -8,9 +8,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- Fix `cargo install` issue introduced by `vergen` version bump
+
+### Changed
+
+- Remove dep on `vergen`
+
 ## [5.0.0] - 2026-07-02
 
-### Changes
+### Changed
 
 - Update dependencies
 - Switch to using `std::range::Range` in the library
@@ -21,13 +29,13 @@ and this project adheres to
 
 - Added `--ignore-whitespace` to control whitespace handling during diffing.
 
-### Changes
+### Changed
 
 - Update dependencies
 
 ## [3.1.1] - 2026-03-31
 
-### Changes
+### Changed
 
 - Update dependencies
 
