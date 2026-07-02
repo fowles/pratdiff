@@ -9,14 +9,7 @@ use clap_complete_command::Shell;
 use common_path::common_path;
 
 #[derive(Parser, Debug)]
-#[command(version = concat!(
-    env!("CARGO_PKG_VERSION"),
-    " (",
-    env!("VERGEN_GIT_DESCRIBE"),
-    ", built ",
-    env!("VERGEN_BUILD_DATE"),
-    ")"
-))]
+#[command(version = concat!(env!("CARGO_PKG_VERSION"), env!("PRATDIFF_VERSION_SUFFIX")))]
 #[command(about = "Diff files with token level colorization")]
 #[command(override_usage = r#"
     pratdiff [OPTIONS] <OLD_FILE> <NEW_FILE>
