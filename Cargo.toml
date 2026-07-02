@@ -19,7 +19,7 @@ clap = { version = "4.6.1", features = ["derive", "help", "usage", "suggestions"
 clap_complete = "4.6.7"
 clap_complete_command = "0.6.1"
 common-path = "1.0.0"
-itertools = "0.14.0"
+itertools = "0.15.0"
 owo-colors = "4.3.0"
 unicode-segmentation = "1.13.3"
 regex = "1.12.4"
@@ -29,5 +29,5 @@ walkdir = "2.5.0"
 tempfile = "3.27.0"
 
 [build-dependencies]
-vergen = { version = "9", features = ["build"] }
-vergen-gitcl = "9"
+vergen = { version = "10", features = ["build"] }
+vergen-gitcl = "10"
