@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::range::Range;
 
 use DiffItem::*;
 
@@ -15,10 +15,10 @@ impl Hunk {
     let mut res = vec![Hunk { diffs: Vec::new() }];
 
     for d in diffs {
-      res.last_mut().unwrap().diffs.push(d.clone());
+      res.last_mut().unwrap().diffs.push(*d);
 
-      if matches!(d, Match { lhs, .. } if lhs.len() > 2 * context) {
-        res.push(Hunk { diffs: vec![d.clone()] });
+      if matches!(d, Match { lhs, .. } if lhs.end - lhs.start > 2 * context) {
+        res.push(Hunk { diffs: vec![*d] });
       }
     }
 
@@ -38,13 +38,13 @@ impl Hunk {
         }
 
         if let Some(Match { lhs, rhs }) = hunk.diffs.first_mut()
-          && lhs.len() > context
+          && lhs.end - lhs.start > context
         {
           lhs.start = lhs.end - context;
           rhs.start = rhs.end - context;
         }
         if let Some(Match { lhs, rhs }) = hunk.diffs.last_mut()
-          && lhs.len() > context
+          && lhs.end - lhs.start > context
         {
           lhs.end = lhs.start + context;
           rhs.end = rhs.start + context;
@@ -88,7 +88,7 @@ mod tests {
       .iter()
       .map(|h| {
         let (l, r) = (h.lhs(), h.rhs());
-        ((l.start + 1, l.len()), (r.start + 1, r.len()))
+        ((l.start + 1, l.end - l.start), (r.start + 1, r.end - r.start))
       })
       .collect::<Vec<_>>()
   }

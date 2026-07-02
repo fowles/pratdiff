@@ -36,10 +36,10 @@ impl DiffSignature {
 
     for item in &token_diffs {
       if let DiffItem::Mutation { lhs: tl, rhs: tr } = item {
-        for &tok in &lhs_tokens[tl.clone()] {
+        for &tok in &lhs_tokens[*tl] {
           NormalizedBytes::new(tok, mode).hash(&mut lhs_hasher);
         }
-        for &tok in &rhs_tokens[tr.clone()] {
+        for &tok in &rhs_tokens[*tr] {
           NormalizedBytes::new(tok, mode).hash(&mut rhs_hasher);
         }
       }
@@ -90,8 +90,8 @@ impl DiffCluster {
 
         for item in &line_diffs {
           if let DiffItem::Mutation { lhs, rhs } = item {
-            let lhs = &lhs_lines[lhs.clone()];
-            let rhs = &rhs_lines[rhs.clone()];
+            let lhs = &lhs_lines[*lhs];
+            let rhs = &rhs_lines[*rhs];
             let sig = DiffSignature::new(lhs, rhs, mode);
             let cluster =
               map.entry(sig.clone()).or_insert_with(|| DiffCluster {

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::iter::zip;
-use std::ops::Range;
+use std::range::Range;
 
 use crate::IgnoreWhitespace;
 use crate::tokens::NormalizedBytes;
@@ -11,7 +11,7 @@ pub enum Side {
   Rhs,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiffItem {
   Match { lhs: Range<usize>, rhs: Range<usize> },
   Mutation { lhs: Range<usize>, rhs: Range<usize> },
@@ -22,15 +22,15 @@ use DiffItem::*;
 impl DiffItem {
   pub fn lhs(&self) -> Range<usize> {
     match self {
-      Match { lhs, .. } => lhs.clone(),
-      Mutation { lhs, .. } => lhs.clone(),
+      Match { lhs, .. } => *lhs,
+      Mutation { lhs, .. } => *lhs,
     }
   }
 
   pub fn rhs(&self) -> Range<usize> {
     match self {
-      Match { rhs, .. } => rhs.clone(),
-      Mutation { rhs, .. } => rhs.clone(),
+      Match { rhs, .. } => *rhs,
+      Mutation { rhs, .. } => *rhs,
     }
   }
 
@@ -259,7 +259,7 @@ fn longest_common_subseq(pairings: &[(usize, usize)]) -> Vec<(usize, usize)> {
 
 #[cfg(test)]
 mod tests {
-  use std::ops::Range;
+  use std::range::Range;
 
   use super::*;
   use crate::tokens::split_lines;

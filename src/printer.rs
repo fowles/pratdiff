@@ -204,9 +204,9 @@ impl<'a> Printer<'a> {
       format!(
         "@@ -{},{} +{},{} @@",
         l.start + 1,
-        l.len(),
+        l.end - l.start,
         r.start + 1,
-        r.len()
+        r.end - r.start
       )
       .style(self.styles.separator)
     )?;
@@ -223,12 +223,12 @@ impl<'a> Printer<'a> {
       match &d {
         Mutation { lhs, rhs } => {
           self.print_mutation_block(
-            &lhs_lines[lhs.clone()],
-            &rhs_lines[rhs.clone()],
+            &lhs_lines[*lhs],
+            &rhs_lines[*rhs],
           )?;
         }
         Match { lhs, .. } => {
-          self.print_lines(&lhs_lines[lhs.clone()], " ", self.styles.both)?;
+          self.print_lines(&lhs_lines[*lhs], " ", self.styles.both)?;
         }
       }
     }
